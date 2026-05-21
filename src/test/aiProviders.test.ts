@@ -160,4 +160,20 @@ describe('AI provider helpers', () => {
     expect(onProgress).toHaveBeenCalledWith(100);
     expect(destroy).toHaveBeenCalledOnce();
   });
+
+  it('passes an abort signal to Chrome AI model setup', async () => {
+    const destroy = vi.fn();
+    const create = vi.fn().mockResolvedValue({ prompt: vi.fn(), destroy });
+    const controller = new AbortController();
+
+    vi.stubGlobal('LanguageModel', { availability: vi.fn(), create });
+
+    await setupChromeAiModel(vi.fn(), controller.signal);
+
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        signal: controller.signal,
+      }),
+    );
+  });
 });

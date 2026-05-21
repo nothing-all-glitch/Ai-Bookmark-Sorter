@@ -226,6 +226,7 @@ export default function App() {
   const [showGeminiKey, setShowGeminiKey] = useState(false);
   const [showCustomKey, setShowCustomKey] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const chromeAiSetupAbortRef = useRef<AbortController | null>(null);
   const pausedRef = useRef(false);
 
   const selectedCount = useMemo(() => previewItems.filter((item) => item.selected).length, [previewItems]);
@@ -397,12 +398,14 @@ export default function App() {
   }
 
   async function handleSetupChromeAi() {
+    const controller = new AbortController();
+    chromeAiSetupAbortRef.current = controller;
     setChromeAiSetupBusy(true);
     setChromeAiSetupProgress(0);
     setNotices([]);
 
     try {
-      await setupChromeAiModel(setChromeAiSetupProgress);
+      await setupChromeAiModel(setChromeAiSetupProgress, controller.signal);
       await refreshChromeAiStatus();
       setNotices((current) =>
         addNoticeOnce(current, {
@@ -411,18 +414,26 @@ export default function App() {
           message: 'Chrome AI is ready. Future runs can use browser-based sorting before local fallback.',
         }),
       );
-    } catch {
+    } catch (error) {
       await refreshChromeAiStatus();
       setNotices((current) =>
         addNoticeOnce(current, {
           provider: 'chrome-ai',
-          severity: 'warning',
-          message: 'Chrome AI could not finish setup right now. Local sorting is still available.',
+          severity: controller.signal.aborted || (error instanceof DOMException && error.name === 'AbortError') ? 'info' : 'warning',
+          message:
+            controller.signal.aborted || (error instanceof DOMException && error.name === 'AbortError')
+              ? 'Chrome AI setup was cancelled. Local sorting is still available.'
+              : 'Chrome AI could not finish setup right now. Local sorting is still available.',
         }),
       );
     } finally {
       setChromeAiSetupBusy(false);
+      chromeAiSetupAbortRef.current = null;
     }
+  }
+
+  function handleCancelChromeAiSetup() {
+    chromeAiSetupAbortRef.current?.abort();
   }
 
   const apiKeyConfigured = settings.apiProvider === 'gemini' ? Boolean(settings.geminiApiKey.trim()) : Boolean(settings.customApiKey.trim());
@@ -536,9 +547,19 @@ export default function App() {
                   {chromeAiSetupBusy && (
                     <Stack spacing={0.5}>
                       <LinearProgress variant="determinate" value={chromeAiSetupProgress} />
-                      <Typography variant="caption" color="text.secondary">
-                        Downloading local AI model {chromeAiSetupProgress}%
-                      </Typography>
+                      <Stack direction="row" alignItems="center" spacing={1}>
+                        <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>
+                          Downloading local AI model {chromeAiSetupProgress}%
+                        </Typography>
+                        <Button
+                          size="small"
+                          color="inherit"
+                          startIcon={<CancelIcon />}
+                          onClick={handleCancelChromeAiSetup}
+                        >
+                          Cancel
+                        </Button>
+                      </Stack>
                     </Stack>
                   )}
                 </Stack>
