@@ -2,6 +2,27 @@
 
 Manifest V3 Chrome extension that scans existing bookmarks, previews AI-suggested folder moves, and applies approved changes into a managed `AI Organized Bookmarks` folder.
 
+## Download
+
+The latest ready-to-install ZIP is available from the GitHub Releases page:
+
+- [Download AI Bookmark Organizer v0.1.0](https://github.com/nothing-all-glitch/Ai-Bookmark-Sorter/releases/download/v0.1.0/ai-bookmark-organizer-v0.1.0.zip)
+- [View all releases](https://github.com/nothing-all-glitch/Ai-Bookmark-Sorter/releases)
+
+## Install In Chrome
+
+Chrome extensions downloaded outside the Chrome Web Store must be loaded manually:
+
+1. Download `ai-bookmark-organizer-v0.1.0.zip` from the release link above.
+2. Unzip the downloaded file.
+3. Open Chrome and go to `chrome://extensions`.
+4. Enable **Developer Mode** in the top-right corner.
+5. Click **Load unpacked**.
+6. Select the unzipped extension folder.
+7. Pin **AI Bookmark Organizer** from the Chrome extensions menu if you want quick access.
+
+After installation, open the extension, review the proposed bookmark moves, then apply only the ones you want.
+
 ## Features
 
 - Reads bookmarks through Chrome's `bookmarks` permission.
