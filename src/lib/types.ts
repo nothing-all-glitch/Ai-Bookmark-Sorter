@@ -84,7 +84,7 @@ export interface PreviewItem extends BookmarkCandidate {
 export interface ProviderNotice {
   provider: ProviderId;
   message: string;
-  severity: 'info' | 'warning' | 'error';
+  severity: 'info' | 'success' | 'warning' | 'error';
 }
 
 export interface ProgressUpdate {

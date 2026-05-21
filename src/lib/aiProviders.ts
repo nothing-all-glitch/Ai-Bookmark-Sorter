@@ -9,6 +9,8 @@ import type {
   ProviderId,
 } from './types';
 
+export type ChromeAiAvailability = 'available' | 'downloadable' | 'downloading' | 'unavailable' | 'unsupported';
+
 declare global {
   const LanguageModel:
     | undefined
@@ -42,6 +44,17 @@ const CHROME_AI_LANGUAGE_OPTIONS = {
   expectedInputs: [{ type: 'text', languages: ['en'] }],
   expectedOutputs: [{ type: 'text', languages: ['en'] }],
 } as const;
+
+function chromeAiSessionOptions(
+  monitor?: (monitorTarget: EventTarget) => void,
+  signal?: AbortSignal,
+): Record<string, unknown> {
+  return {
+    ...CHROME_AI_LANGUAGE_OPTIONS,
+    ...(monitor ? { monitor } : {}),
+    ...(signal ? { signal } : {}),
+  };
+}
 
 function buildPrompt(bookmarks: BookmarkCandidate[], taxonomy: string[], allowNewFolders: boolean): string {
   const compactBookmarks = bookmarks.map((bookmark) => ({
@@ -280,7 +293,7 @@ export function createChromeAiProvider(): AiProvider {
         throw new ProviderError('Chrome built-in AI needs its local model download before it can classify bookmarks.', 'chrome-ai');
       }
 
-      const session = await LanguageModel.create(CHROME_AI_LANGUAGE_OPTIONS);
+      const session = await LanguageModel.create(chromeAiSessionOptions());
 
       try {
         const text = await session.prompt(buildPrompt(bookmarks, taxonomy, settings.allowNewFolders));
@@ -297,6 +310,38 @@ export function createChromeAiProvider(): AiProvider {
       }
     },
   };
+}
+
+export async function getChromeAiAvailability(): Promise<ChromeAiAvailability> {
+  if (typeof LanguageModel === 'undefined') {
+    return 'unsupported';
+  }
+  return LanguageModel.availability(CHROME_AI_LANGUAGE_OPTIONS);
+}
+
+export async function setupChromeAiModel(
+  onProgress: (progress: number) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  if (typeof LanguageModel === 'undefined') {
+    throw new Error('Chrome built-in AI is not available in this browser.');
+  }
+
+  onProgress(2);
+  const session = await LanguageModel.create(
+    chromeAiSessionOptions((monitorTarget) => {
+      monitorTarget.addEventListener('downloadprogress', (event) => {
+        const progressEvent = event as ProgressEvent;
+        const loaded = Number(progressEvent.loaded);
+        if (Number.isFinite(loaded)) {
+          onProgress(Math.max(2, Math.min(100, Math.round(loaded * 100))));
+        }
+      });
+    }, signal),
+  );
+
+  session.destroy?.();
+  onProgress(100);
 }
 
 export function createDirectHeuristicProvider(): AiProvider {

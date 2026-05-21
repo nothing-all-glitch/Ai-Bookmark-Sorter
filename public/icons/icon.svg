@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">AI Bookmark Organizer icon</title>
+  <desc id="desc">A blue bookmark with organized folder tabs and a gold AI sparkle.</desc>
+  <defs>
+    <linearGradient id="bookmark" x1="28" x2="100" y1="12" y2="116" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4a94ce" />
+      <stop offset="0.56" stop-color="#1769aa" />
+      <stop offset="1" stop-color="#0f4f84" />
+    </linearGradient>
+    <linearGradient id="folder" x1="42" x2="94" y1="40" y2="82" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff3b0" />
+      <stop offset="1" stop-color="#d89622" />
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="6" stdDeviation="5" flood-color="#0f2742" flood-opacity="0.2" />
+    </filter>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="#f7f9fb" />
+  <path
+    d="M33 19.5C33 14.8 36.8 11 41.5 11h45c4.7 0 8.5 3.8 8.5 8.5v88.4c0 6.2-7.3 9.6-12.1 5.7L64 98.1l-18.9 15.5c-4.8 3.9-12.1.5-12.1-5.7V19.5Z"
+    fill="url(#bookmark)"
+    filter="url(#shadow)"
+  />
+  <path
+    d="M45 46c0-4.4 3.6-8 8-8h12.2c2.2 0 4.3.9 5.8 2.5l3.1 3.2H83c4.4 0 8 3.6 8 8v28.4c0 4.4-3.6 8-8 8H53c-4.4 0-8-3.6-8-8V46Z"
+    fill="#f6cf65"
+  />
+  <path
+    d="M42 55.5c0-4.1 3.4-7.5 7.5-7.5h37c4.1 0 7.5 3.4 7.5 7.5v26c0 4.1-3.4 7.5-7.5 7.5h-37c-4.1 0-7.5-3.4-7.5-7.5v-26Z"
+    fill="url(#folder)"
+  />
+  <path d="M52 64h32M52 73h24" stroke="#7b4d12" stroke-width="6" stroke-linecap="round" opacity="0.6" />
+  <path
+    d="M95.8 27.5 100 39l11.5 4.2L100 47.4l-4.2 11.5-4.2-11.5-11.5-4.2 11.5-4.2 4.2-11.5Z"
+    fill="#f6cf65"
+    stroke="#7b4d12"
+    stroke-linejoin="round"
+    stroke-width="3"
+  />
+  <path d="m80.5 22.5 1.9 5.1 5.1 1.9-5.1 1.9-1.9 5.1-1.9-5.1-5.1-1.9 5.1-1.9 1.9-5.1Z" fill="#2e7d5b" />
+</svg>

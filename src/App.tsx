@@ -6,6 +6,7 @@ import {
   Button,
   Checkbox,
   Chip,
+  Collapse,
   CircularProgress,
   Divider,
   FormControl,
@@ -14,6 +15,10 @@ import {
   InputAdornment,
   InputLabel,
   LinearProgress,
+  List,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
   MenuItem,
   Paper,
   Select,
@@ -21,12 +26,6 @@ import {
   Stack,
   Switch,
   Tab,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Tabs,
   TextField,
   Toolbar,
@@ -34,10 +33,15 @@ import {
   Typography,
 } from '@mui/material';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import BookmarkIcon from '@mui/icons-material/Bookmark';
 import BookmarkAddedIcon from '@mui/icons-material/BookmarkAdded';
 import CancelIcon from '@mui/icons-material/Cancel';
+import DownloadIcon from '@mui/icons-material/Download';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import FolderIcon from '@mui/icons-material/Folder';
 import KeyIcon from '@mui/icons-material/Key';
 import PauseIcon from '@mui/icons-material/Pause';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -49,6 +53,11 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import VisibilityIcon from '@mui/icons-material/Visibility';
+import {
+  getChromeAiAvailability,
+  setupChromeAiModel,
+  type ChromeAiAvailability,
+} from './lib/aiProviders';
 import {
   applyPreview,
   createPreview,
@@ -159,13 +168,7 @@ function friendlyRunNotices(notices: ProviderNotice[], items: PreviewItem[]): Pr
   }
 
   if (usedLocalSorting && failedAiProviders.has('chrome-ai')) {
-    return [
-      {
-        provider: 'heuristic',
-        severity: 'info',
-        message: "Used local sorting for this run because Chrome's built-in AI is still setting up. Your preview is ready to review.",
-      },
-    ];
+    return [];
   }
 
   if (usedLocalSorting && failedAiProviders.size > 0) {
@@ -181,6 +184,28 @@ function friendlyRunNotices(notices: ProviderNotice[], items: PreviewItem[]): Pr
   return [];
 }
 
+function chromeAiStatusText(status: ChromeAiAvailability): string {
+  const labels: Record<ChromeAiAvailability, string> = {
+    available: 'Ready',
+    downloadable: 'Needs setup',
+    downloading: 'Download pending',
+    unavailable: 'Unavailable',
+    unsupported: 'Unsupported',
+  };
+  return labels[status];
+}
+
+function chromeAiHelpText(status: ChromeAiAvailability): string {
+  const labels: Record<ChromeAiAvailability, string> = {
+    available: 'Chrome AI is ready for local bookmark sorting.',
+    downloadable: 'Download the local AI model once to use browser-based AI sorting.',
+    downloading: 'Chrome is preparing the local AI model.',
+    unavailable: 'This Chrome profile or device does not currently support built-in AI.',
+    unsupported: 'This browser does not expose Chrome built-in AI.',
+  };
+  return labels[status];
+}
+
 export default function App() {
   const [tab, setTab] = useState(0);
   const [settings, setSettings] = useState<OrganizeSettings>(DEFAULT_SETTINGS);
@@ -191,6 +216,10 @@ export default function App() {
   const [previewItems, setPreviewItems] = useState<PreviewItem[]>([]);
   const [progress, setProgress] = useState<ProgressUpdate>(idleProgress);
   const [notices, setNotices] = useState<ProviderNotice[]>([]);
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(() => new Set());
+  const [chromeAiAvailability, setChromeAiAvailability] = useState<ChromeAiAvailability>('unsupported');
+  const [chromeAiSetupBusy, setChromeAiSetupBusy] = useState(false);
+  const [chromeAiSetupProgress, setChromeAiSetupProgress] = useState(0);
   const [busy, setBusy] = useState(false);
   const [paused, setPaused] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -200,15 +229,31 @@ export default function App() {
   const pausedRef = useRef(false);
 
   const selectedCount = useMemo(() => previewItems.filter((item) => item.selected).length, [previewItems]);
+  const previewGroups = useMemo(() => {
+    const groups = new Map<string, PreviewItem[]>();
+    for (const item of previewItems) {
+      const folder = item.targetFolder.trim() || 'Other';
+      groups.set(folder, [...(groups.get(folder) ?? []), item]);
+    }
+    return [...groups.entries()]
+      .map(([folder, items]) => ({
+        folder,
+        items: [...items].sort((a, b) => a.title.localeCompare(b.title)),
+        selected: items.filter((item) => item.selected).length,
+        confidence: items.reduce((total, item) => total + item.confidence, 0) / items.length,
+      }))
+      .sort((a, b) => a.folder.localeCompare(b.folder));
+  }, [previewItems]);
 
   useEffect(() => {
     let mounted = true;
     async function boot() {
-      const [savedSettings, initialSnapshot, summary, undo] = await Promise.all([
+      const [savedSettings, initialSnapshot, summary, undo, aiAvailability] = await Promise.all([
         loadSettings(),
         scanBookmarks(),
         loadLastRunSummary(),
         loadUndoPlan(),
+        getChromeAiAvailability(),
       ]);
       if (!mounted) {
         return;
@@ -217,6 +262,7 @@ export default function App() {
       setSnapshot(initialSnapshot);
       setLastRun(summary);
       setUndoPlan(undo);
+      setChromeAiAvailability(aiAvailability);
     }
     boot().catch((error) => {
       setNotices([{ provider: 'heuristic', severity: 'error', message: error instanceof Error ? error.message : 'Startup failed' }]);
@@ -232,6 +278,10 @@ export default function App() {
 
   async function refreshSnapshot() {
     setSnapshot(await scanBookmarks());
+  }
+
+  async function refreshChromeAiStatus() {
+    setChromeAiAvailability(await getChromeAiAvailability());
   }
 
   function makeControls() {
@@ -258,6 +308,7 @@ export default function App() {
       setPreview(result);
       setPreviewItems(result.previewItems);
       setSnapshot(result.snapshot);
+      setExpandedFolders(new Set(result.previewItems.map((item) => item.targetFolder)));
       setNotices(friendlyRunNotices(result.notices, result.previewItems));
       setTab(1);
     } catch (error) {
@@ -327,6 +378,51 @@ export default function App() {
 
   function updatePreviewItem(id: string, patch: Partial<PreviewItem>) {
     setPreviewItems((items) => items.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+  }
+
+  function toggleFolder(folder: string) {
+    setExpandedFolders((current) => {
+      const next = new Set(current);
+      if (next.has(folder)) {
+        next.delete(folder);
+      } else {
+        next.add(folder);
+      }
+      return next;
+    });
+  }
+
+  function setFolderSelected(folder: string, selected: boolean) {
+    setPreviewItems((items) => items.map((item) => (item.targetFolder === folder ? { ...item, selected } : item)));
+  }
+
+  async function handleSetupChromeAi() {
+    setChromeAiSetupBusy(true);
+    setChromeAiSetupProgress(0);
+    setNotices([]);
+
+    try {
+      await setupChromeAiModel(setChromeAiSetupProgress);
+      await refreshChromeAiStatus();
+      setNotices((current) =>
+        addNoticeOnce(current, {
+          provider: 'chrome-ai',
+          severity: 'success',
+          message: 'Chrome AI is ready. Future runs can use browser-based sorting before local fallback.',
+        }),
+      );
+    } catch {
+      await refreshChromeAiStatus();
+      setNotices((current) =>
+        addNoticeOnce(current, {
+          provider: 'chrome-ai',
+          severity: 'warning',
+          message: 'Chrome AI could not finish setup right now. Local sorting is still available.',
+        }),
+      );
+    } finally {
+      setChromeAiSetupBusy(false);
+    }
   }
 
   const apiKeyConfigured = settings.apiProvider === 'gemini' ? Boolean(settings.geminiApiKey.trim()) : Boolean(settings.customApiKey.trim());
@@ -412,6 +508,39 @@ export default function App() {
                   {apiKeyConfigured && settings.aiMode !== 'local-only' && <ProviderChip provider={settings.apiProvider} />}
                   <ProviderChip provider="chrome-ai" />
                   <ProviderChip provider="heuristic" />
+                </Stack>
+                <Divider />
+                <Stack spacing={1}>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <SmartToyIcon color={chromeAiAvailability === 'available' ? 'success' : 'primary'} fontSize="small" />
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography variant="body2" fontWeight={700}>
+                        Chrome AI: {chromeAiStatusText(chromeAiAvailability)}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {chromeAiHelpText(chromeAiAvailability)}
+                      </Typography>
+                    </Box>
+                    {(chromeAiAvailability === 'downloadable' || chromeAiAvailability === 'downloading') && (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<DownloadIcon />}
+                        onClick={handleSetupChromeAi}
+                        disabled={busy || chromeAiSetupBusy}
+                      >
+                        Set Up
+                      </Button>
+                    )}
+                  </Stack>
+                  {chromeAiSetupBusy && (
+                    <Stack spacing={0.5}>
+                      <LinearProgress variant="determinate" value={chromeAiSetupProgress} />
+                      <Typography variant="caption" color="text.secondary">
+                        Downloading local AI model {chromeAiSetupProgress}%
+                      </Typography>
+                    </Stack>
+                  )}
                 </Stack>
                 <Divider />
                 <Stack direction="row" spacing={1}>
@@ -502,72 +631,115 @@ export default function App() {
               </Stack>
             </Paper>
 
-            <TableContainer component={Paper} variant="outlined">
-              <Table size="small" stickyHeader>
-                <TableHead>
-                  <TableRow>
-                    <TableCell padding="checkbox">
-                      <Checkbox
-                        checked={previewItems.length > 0 && selectedCount === previewItems.length}
-                        indeterminate={selectedCount > 0 && selectedCount < previewItems.length}
-                        onChange={(event) => setPreviewItems((items) => items.map((item) => ({ ...item, selected: event.target.checked })))}
-                      />
-                    </TableCell>
-                    <TableCell>Bookmark</TableCell>
-                    <TableCell>Folder</TableCell>
-                    <TableCell>AI</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {previewItems.map((item) => (
-                    <TableRow key={item.id} hover selected={item.selected}>
-                      <TableCell padding="checkbox">
-                        <Checkbox
-                          checked={item.selected}
-                          onChange={(event) => updatePreviewItem(item.id, { selected: event.target.checked })}
-                        />
-                      </TableCell>
-                      <TableCell sx={{ minWidth: 180, maxWidth: 260 }}>
-                        <Typography variant="body2" fontWeight={700} noWrap title={item.title}>
-                          {item.title}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" noWrap component="div" title={item.domain}>
-                          {item.domain || item.url}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" noWrap component="div" title={item.currentPath}>
-                          {item.currentPath}
-                        </Typography>
-                      </TableCell>
-                      <TableCell sx={{ minWidth: 150 }}>
-                        <TextField
-                          size="small"
-                          value={item.targetFolder}
-                          onChange={(event) => updatePreviewItem(item.id, { targetFolder: event.target.value })}
-                          inputProps={{ 'aria-label': `Target folder for ${item.title}` }}
-                        />
-                      </TableCell>
-                      <TableCell sx={{ minWidth: 104 }}>
-                        <Stack spacing={0.75}>
-                          <ProviderChip provider={item.provider} />
-                          <Typography variant="caption" color="text.secondary">
-                            {Math.round(item.confidence * 100)}%
-                          </Typography>
-                        </Stack>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {previewItems.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={4}>
-                        <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 4 }}>
-                          No preview yet.
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
+            <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 1, py: 0.75, borderBottom: '1px solid', borderColor: 'divider' }}>
+                <Checkbox
+                  size="small"
+                  checked={previewItems.length > 0 && selectedCount === previewItems.length}
+                  indeterminate={selectedCount > 0 && selectedCount < previewItems.length}
+                  onChange={(event) => setPreviewItems((items) => items.map((item) => ({ ...item, selected: event.target.checked })))}
+                  inputProps={{ 'aria-label': 'Select all suggested moves' }}
+                />
+                <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>
+                  {previewGroups.length} folders
+                </Typography>
+              </Stack>
+
+              {previewGroups.length > 0 ? (
+                <List disablePadding>
+                  {previewGroups.map((group) => {
+                    const expanded = expandedFolders.has(group.folder);
+                    const allSelected = group.selected === group.items.length;
+                    const partiallySelected = group.selected > 0 && !allSelected;
+
+                    return (
+                      <Box key={group.folder}>
+                        <ListItemButton
+                          dense
+                          onClick={() => toggleFolder(group.folder)}
+                          sx={{ borderBottom: expanded ? '1px solid' : 0, borderColor: 'divider', minHeight: 42 }}
+                        >
+                          <ListItemIcon sx={{ minWidth: 32 }}>
+                            {expanded ? <ExpandMoreIcon fontSize="small" /> : <ChevronRightIcon fontSize="small" />}
+                          </ListItemIcon>
+                          <Checkbox
+                            size="small"
+                            checked={allSelected}
+                            indeterminate={partiallySelected}
+                            onClick={(event) => event.stopPropagation()}
+                            onChange={(event) => setFolderSelected(group.folder, event.target.checked)}
+                            inputProps={{ 'aria-label': `Select ${group.folder}` }}
+                            sx={{ mr: 0.5 }}
+                          />
+                          <ListItemIcon sx={{ minWidth: 32, color: 'primary.main' }}>
+                            <FolderIcon fontSize="small" />
+                          </ListItemIcon>
+                          <ListItemText
+                            primary={group.folder}
+                            secondary={`${group.items.length} bookmarks • ${group.selected} selected`}
+                            primaryTypographyProps={{ noWrap: true, fontWeight: 700 }}
+                            secondaryTypographyProps={{ noWrap: true }}
+                          />
+                          <Chip size="small" variant="outlined" label={`${Math.round(group.confidence * 100)}%`} />
+                        </ListItemButton>
+
+                        <Collapse in={expanded} timeout="auto" unmountOnExit>
+                          <List disablePadding>
+                            {group.items.map((item) => (
+                              <Box
+                                key={item.id}
+                                sx={{
+                                  display: 'grid',
+                                  gridTemplateColumns: '32px 28px minmax(0, 1fr)',
+                                  gap: 0.5,
+                                  alignItems: 'start',
+                                  px: 1,
+                                  py: 1,
+                                  pl: 5,
+                                  borderBottom: '1px solid',
+                                  borderColor: 'divider',
+                                  bgcolor: item.selected ? 'action.hover' : 'transparent',
+                                }}
+                              >
+                                <Checkbox
+                                  size="small"
+                                  checked={item.selected}
+                                  onChange={(event) => updatePreviewItem(item.id, { selected: event.target.checked })}
+                                  inputProps={{ 'aria-label': `Select ${item.title}` }}
+                                />
+                                <BookmarkIcon fontSize="small" color="action" sx={{ mt: 0.75 }} />
+                                <Stack spacing={0.75} sx={{ minWidth: 0 }}>
+                                  <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
+                                    <Typography variant="body2" fontWeight={700} noWrap title={item.title} sx={{ flex: 1 }}>
+                                      {item.title}
+                                    </Typography>
+                                    <ProviderChip provider={item.provider} />
+                                  </Stack>
+                                  <Typography variant="caption" color="text.secondary" noWrap title={`${item.domain} • ${item.currentPath}`}>
+                                    {item.domain || item.url} • {item.currentPath}
+                                  </Typography>
+                                  <TextField
+                                    size="small"
+                                    label="Folder"
+                                    value={item.targetFolder}
+                                    onChange={(event) => updatePreviewItem(item.id, { targetFolder: event.target.value })}
+                                    inputProps={{ 'aria-label': `Target folder for ${item.title}` }}
+                                  />
+                                </Stack>
+                              </Box>
+                            ))}
+                          </List>
+                        </Collapse>
+                      </Box>
+                    );
+                  })}
+                </List>
+              ) : (
+                <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 4 }}>
+                  No preview yet.
+                </Typography>
+              )}
+            </Paper>
           </Stack>
         )}
 

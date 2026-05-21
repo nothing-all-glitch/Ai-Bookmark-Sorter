@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createChromeAiProvider,
+  getChromeAiAvailability,
   getConfiguredApiProvider,
+  setupChromeAiModel,
   validateClassifications,
 } from '../lib/aiProviders';
 import {
@@ -117,6 +119,45 @@ describe('AI provider helpers', () => {
     expect(availability).toHaveBeenCalledWith(languageOptions);
     expect(create).toHaveBeenCalledWith(languageOptions);
     expect(prompt).toHaveBeenCalledOnce();
+    expect(destroy).toHaveBeenCalledOnce();
+  });
+
+  it('checks Chrome AI availability with the same language options', async () => {
+    const availability = vi.fn().mockResolvedValue('downloadable');
+    vi.stubGlobal('LanguageModel', { availability, create: vi.fn() });
+
+    await expect(getChromeAiAvailability()).resolves.toBe('downloadable');
+    expect(availability).toHaveBeenCalledWith({
+      expectedInputs: [{ type: 'text', languages: ['en'] }],
+      expectedOutputs: [{ type: 'text', languages: ['en'] }],
+    });
+  });
+
+  it('reports Chrome AI model setup progress', async () => {
+    const availability = vi.fn().mockResolvedValue('downloadable');
+    const destroy = vi.fn();
+    const create = vi.fn(async (options: { monitor?: (target: EventTarget) => void }) => {
+      const target = new EventTarget();
+      options.monitor?.(target);
+      target.dispatchEvent(Object.assign(new Event('downloadprogress'), { loaded: 0.42 }));
+      return { prompt: vi.fn(), destroy };
+    });
+    const onProgress = vi.fn();
+
+    vi.stubGlobal('LanguageModel', { availability, create });
+
+    await setupChromeAiModel(onProgress);
+
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        expectedInputs: [{ type: 'text', languages: ['en'] }],
+        expectedOutputs: [{ type: 'text', languages: ['en'] }],
+        monitor: expect.any(Function),
+      }),
+    );
+    expect(onProgress).toHaveBeenCalledWith(2);
+    expect(onProgress).toHaveBeenCalledWith(42);
+    expect(onProgress).toHaveBeenCalledWith(100);
     expect(destroy).toHaveBeenCalledOnce();
   });
 });
