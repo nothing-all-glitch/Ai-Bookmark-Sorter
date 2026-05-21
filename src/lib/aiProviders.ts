@@ -15,7 +15,7 @@ declare global {
     | {
         availability(options?: Record<string, unknown>): Promise<'available' | 'downloadable' | 'downloading' | 'unavailable'>;
         create(options?: Record<string, unknown>): Promise<{
-          prompt(input: string): Promise<string>;
+          prompt(input: string, options?: Record<string, unknown>): Promise<string>;
           destroy?: () => void;
         }>;
       };
@@ -37,6 +37,11 @@ type RawClassification = {
   confidence?: unknown;
   reason?: unknown;
 };
+
+const CHROME_AI_LANGUAGE_OPTIONS = {
+  expectedInputs: [{ type: 'text', languages: ['en'] }],
+  expectedOutputs: [{ type: 'text', languages: ['en'] }],
+} as const;
 
 function buildPrompt(bookmarks: BookmarkCandidate[], taxonomy: string[], allowNewFolders: boolean): string {
   const compactBookmarks = bookmarks.map((bookmark) => ({
@@ -267,7 +272,7 @@ export function createChromeAiProvider(): AiProvider {
         throw new ProviderError('Chrome built-in AI is not available in this browser.', 'chrome-ai');
       }
 
-      const availability = await LanguageModel.availability();
+      const availability = await LanguageModel.availability(CHROME_AI_LANGUAGE_OPTIONS);
       if (availability === 'unavailable') {
         throw new ProviderError('Chrome built-in AI is unavailable on this device/profile.', 'chrome-ai');
       }
@@ -275,9 +280,7 @@ export function createChromeAiProvider(): AiProvider {
         throw new ProviderError('Chrome built-in AI needs its local model download before it can classify bookmarks.', 'chrome-ai');
       }
 
-      const session = await LanguageModel.create({
-        temperature: 0.1,
-      });
+      const session = await LanguageModel.create(CHROME_AI_LANGUAGE_OPTIONS);
 
       try {
         const text = await session.prompt(buildPrompt(bookmarks, taxonomy, settings.allowNewFolders));
