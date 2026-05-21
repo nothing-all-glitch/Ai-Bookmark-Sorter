@@ -1,6 +1,24 @@
 # AI Bookmark Organizer
 
+<p align="center">
+  <img src="docs/assets/icon.png" alt="AI Bookmark Organizer icon" width="112" />
+</p>
+
 Manifest V3 Chrome extension that scans existing bookmarks, previews AI-suggested folder moves, and applies approved changes into a managed `AI Organized Bookmarks` folder.
+
+## Screenshots
+
+<p align="center">
+  <img src="docs/assets/screenshot-dashboard.png" alt="AI Bookmark Organizer dashboard screenshot" width="720" />
+</p>
+
+<p align="center">
+  <img src="docs/assets/screenshot-preview.png" alt="AI Bookmark Organizer preview screenshot" width="720" />
+</p>
+
+<p align="center">
+  <img src="docs/assets/screenshot-settings.png" alt="AI Bookmark Organizer settings screenshot" width="720" />
+</p>
 
 ## Download
 
