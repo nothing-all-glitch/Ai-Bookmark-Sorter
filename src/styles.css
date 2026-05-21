@@ -1,0 +1,14 @@
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #f7f9fb;
+}
+
+* {
+  box-sizing: border-box;
+}
