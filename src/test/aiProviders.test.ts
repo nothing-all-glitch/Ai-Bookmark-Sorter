@@ -4,6 +4,7 @@ import {
   getChromeAiAvailability,
   getConfiguredApiProvider,
   setupChromeAiModel,
+  testApiProviderKey,
   validateClassifications,
 } from '../lib/aiProviders';
 import {
@@ -13,6 +14,7 @@ import {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 const bookmarks: BookmarkCandidate[] = [
@@ -175,5 +177,67 @@ describe('AI provider helpers', () => {
         signal: controller.signal,
       }),
     );
+  });
+
+  it('verifies a configured Gemini API key with a tiny classification request', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    text: JSON.stringify({
+                      classifications: [
+                        {
+                          bookmarkId: 'api-key-test',
+                          folder: 'Development',
+                          confidence: 0.9,
+                          reason: 'Developer docs',
+                        },
+                      ],
+                    }),
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+      }),
+    );
+
+    await expect(
+      testApiProviderKey({
+        ...DEFAULT_SETTINGS,
+        geminiApiKey: 'test-key',
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      provider: 'gemini',
+    });
+  });
+
+  it('returns a friendly failed key check when the API rejects the request', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 403,
+        text: async () => 'Forbidden',
+      }),
+    );
+
+    await expect(
+      testApiProviderKey({
+        ...DEFAULT_SETTINGS,
+        geminiApiKey: 'bad-key',
+      }),
+    ).resolves.toMatchObject({
+      ok: false,
+      provider: 'gemini',
+    });
   });
 });

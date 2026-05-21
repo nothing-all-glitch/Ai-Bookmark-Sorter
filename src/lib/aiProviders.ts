@@ -2,6 +2,7 @@ import { heuristicClassify } from './heuristics';
 import { closestTaxonomyFolder, isValidFolderName, normalizeFolderName } from './taxonomy';
 import type {
   AiProvider,
+  ApiProvider,
   BookmarkCandidate,
   Classification,
   ClassifyBatchInput,
@@ -10,6 +11,12 @@ import type {
 } from './types';
 
 export type ChromeAiAvailability = 'available' | 'downloadable' | 'downloading' | 'unavailable' | 'unsupported';
+
+export interface ApiKeyCheckResult {
+  ok: boolean;
+  provider: ApiProvider;
+  message: string;
+}
 
 declare global {
   const LanguageModel:
@@ -359,4 +366,57 @@ export function getConfiguredApiProvider(settings: OrganizeSettings): AiProvider
     return settings.customApiKey.trim() ? createOpenAiCompatibleProvider() : null;
   }
   return settings.geminiApiKey.trim() ? createGeminiProvider() : null;
+}
+
+export async function testApiProviderKey(
+  settings: OrganizeSettings,
+  signal?: AbortSignal,
+): Promise<ApiKeyCheckResult> {
+  const provider = getConfiguredApiProvider(settings);
+  if (!provider) {
+    return {
+      ok: false,
+      provider: settings.apiProvider,
+      message: 'Add an API key to use cloud AI sorting.',
+    };
+  }
+
+  const sampleBookmark: BookmarkCandidate = {
+    id: 'api-key-test',
+    title: 'React Docs',
+    url: 'https://react.dev/reference/react',
+    domain: 'react.dev',
+    parentId: 'test',
+    index: 0,
+    currentPath: 'Bookmarks Bar',
+  };
+
+  try {
+    await provider.classifyBatch({
+      bookmarks: [sampleBookmark],
+      taxonomy: ['Development', 'Other'],
+      settings: {
+        ...settings,
+        allowNewFolders: false,
+        minConfidence: 0.1,
+      },
+      signal,
+    });
+
+    return {
+      ok: true,
+      provider: settings.apiProvider,
+      message: `${provider.label} is connected and ready.`,
+    };
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw error;
+    }
+
+    return {
+      ok: false,
+      provider: settings.apiProvider,
+      message: `${provider.label} could not be verified. Check the key, quota, and internet connection.`,
+    };
+  }
 }

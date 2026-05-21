@@ -56,6 +56,7 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import {
   getChromeAiAvailability,
   setupChromeAiModel,
+  testApiProviderKey,
   type ChromeAiAvailability,
 } from './lib/aiProviders';
 import {
@@ -206,6 +207,44 @@ function chromeAiHelpText(status: ChromeAiAvailability): string {
   return labels[status];
 }
 
+type ApiKeyCheckState = {
+  status: 'idle' | 'checking' | 'valid' | 'invalid' | 'skipped';
+  provider: OrganizeSettings['apiProvider'];
+  message: string;
+};
+
+function apiProviderName(provider: OrganizeSettings['apiProvider']): string {
+  return provider === 'gemini' ? 'Gemini' : 'API provider';
+}
+
+function hasConfiguredApiKey(settings: OrganizeSettings): boolean {
+  return settings.apiProvider === 'gemini' ? Boolean(settings.geminiApiKey.trim()) : Boolean(settings.customApiKey.trim());
+}
+
+function initialApiKeyCheckState(settings: OrganizeSettings): ApiKeyCheckState {
+  if (settings.aiMode === 'local-only') {
+    return {
+      status: 'skipped',
+      provider: settings.apiProvider,
+      message: 'Local-only mode is active.',
+    };
+  }
+
+  if (!hasConfiguredApiKey(settings)) {
+    return {
+      status: 'idle',
+      provider: settings.apiProvider,
+      message: 'No API key saved.',
+    };
+  }
+
+  return {
+    status: 'idle',
+    provider: settings.apiProvider,
+    message: `${apiProviderName(settings.apiProvider)} API key is saved and will be checked when you save settings.`,
+  };
+}
+
 export default function App() {
   const [tab, setTab] = useState(0);
   const [settings, setSettings] = useState<OrganizeSettings>(DEFAULT_SETTINGS);
@@ -218,6 +257,7 @@ export default function App() {
   const [notices, setNotices] = useState<ProviderNotice[]>([]);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(() => new Set());
   const [chromeAiAvailability, setChromeAiAvailability] = useState<ChromeAiAvailability>('unsupported');
+  const [apiKeyCheck, setApiKeyCheck] = useState<ApiKeyCheckState>(initialApiKeyCheckState(DEFAULT_SETTINGS));
   const [chromeAiSetupBusy, setChromeAiSetupBusy] = useState(false);
   const [chromeAiSetupProgress, setChromeAiSetupProgress] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -226,6 +266,7 @@ export default function App() {
   const [showGeminiKey, setShowGeminiKey] = useState(false);
   const [showCustomKey, setShowCustomKey] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const apiKeyCheckAbortRef = useRef<AbortController | null>(null);
   const chromeAiSetupAbortRef = useRef<AbortController | null>(null);
   const pausedRef = useRef(false);
 
@@ -264,6 +305,7 @@ export default function App() {
       setLastRun(summary);
       setUndoPlan(undo);
       setChromeAiAvailability(aiAvailability);
+      setApiKeyCheck(initialApiKeyCheckState(savedSettings));
     }
     boot().catch((error) => {
       setNotices([{ provider: 'heuristic', severity: 'error', message: error instanceof Error ? error.message : 'Startup failed' }]);
@@ -375,6 +417,63 @@ export default function App() {
     await saveSettings(settings);
     setSaved(true);
     globalThis.setTimeout(() => setSaved(false), 1800);
+
+    apiKeyCheckAbortRef.current?.abort();
+
+    if (settings.aiMode === 'local-only') {
+      setApiKeyCheck({
+        status: 'skipped',
+        provider: settings.apiProvider,
+        message: 'Local-only mode is active, so API keys will not be used.',
+      });
+      return;
+    }
+
+    if (!hasConfiguredApiKey(settings)) {
+      setApiKeyCheck({
+        status: 'idle',
+        provider: settings.apiProvider,
+        message: 'No API key saved. Chrome AI and local sorting remain available.',
+      });
+      return;
+    }
+
+    const controller = new AbortController();
+    apiKeyCheckAbortRef.current = controller;
+    setApiKeyCheck({
+      status: 'checking',
+      provider: settings.apiProvider,
+      message: `Checking ${apiProviderName(settings.apiProvider)} API key...`,
+    });
+
+    try {
+      const result = await testApiProviderKey(settings, controller.signal);
+      if (controller.signal.aborted) {
+        return;
+      }
+
+      setApiKeyCheck({
+        status: result.ok ? 'valid' : 'invalid',
+        provider: result.provider,
+        message: result.ok
+          ? `${apiProviderName(result.provider)} API key works. Bookmark sorting will use it first.`
+          : result.message,
+      });
+    } catch (error) {
+      if (controller.signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) {
+        return;
+      }
+
+      setApiKeyCheck({
+        status: 'invalid',
+        provider: settings.apiProvider,
+        message: `${apiProviderName(settings.apiProvider)} API key could not be checked. Chrome AI and local sorting remain available.`,
+      });
+    } finally {
+      if (apiKeyCheckAbortRef.current === controller) {
+        apiKeyCheckAbortRef.current = null;
+      }
+    }
   }
 
   function updatePreviewItem(id: string, patch: Partial<PreviewItem>) {
@@ -436,7 +535,13 @@ export default function App() {
     chromeAiSetupAbortRef.current?.abort();
   }
 
-  const apiKeyConfigured = settings.apiProvider === 'gemini' ? Boolean(settings.geminiApiKey.trim()) : Boolean(settings.customApiKey.trim());
+  const apiKeyConfigured = hasConfiguredApiKey(settings);
+  const activeProviderMessage =
+    settings.aiMode === 'local-only'
+      ? 'Local-only mode is active. The API key provider will not be used.'
+      : apiKeyConfigured
+        ? `Using ${apiProviderName(settings.apiProvider)} API key first. Chrome AI and local sorting are fallbacks.`
+        : 'No API key is saved. Chrome AI will be tried first, then local sorting.';
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
@@ -507,19 +612,25 @@ export default function App() {
                   <Typography variant="h2">Provider Chain</Typography>
                 </Stack>
                 <Typography variant="body2" color="text.secondary">
-                  {settings.aiMode === 'api-first'
-                    ? apiKeyConfigured
-                      ? 'API key provider, Chrome built-in AI, then deterministic fallback.'
-                      : 'Chrome built-in AI, then deterministic fallback until an API key is saved.'
-                    : settings.aiMode === 'no-key-first'
-                      ? 'Chrome built-in AI, API key provider, then deterministic fallback.'
-                      : 'Chrome built-in AI, then deterministic fallback.'}
+                  {activeProviderMessage}
                 </Typography>
                 <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                   {apiKeyConfigured && settings.aiMode !== 'local-only' && <ProviderChip provider={settings.apiProvider} />}
                   <ProviderChip provider="chrome-ai" />
                   <ProviderChip provider="heuristic" />
                 </Stack>
+                {apiKeyConfigured && settings.aiMode !== 'local-only' && (
+                  <Alert severity={apiKeyCheck.status === 'invalid' ? 'warning' : apiKeyCheck.status === 'checking' ? 'info' : 'success'}>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      {apiKeyCheck.status === 'checking' && <CircularProgress size={16} />}
+                      <Typography variant="body2">
+                        {apiKeyCheck.status === 'valid'
+                          ? `${apiProviderName(settings.apiProvider)} API key is active and will be used first.`
+                          : apiKeyCheck.message}
+                      </Typography>
+                    </Stack>
+                  </Alert>
+                )}
                 <Divider />
                 <Stack spacing={1}>
                   <Stack direction="row" spacing={1} alignItems="center">
@@ -929,8 +1040,26 @@ export default function App() {
 
               <Alert severity="info">API keys are stored only in this browser profile with chrome.storage.local.</Alert>
 
-              <Button variant="contained" startIcon={<SaveIcon />} onClick={handleSaveSettings}>
-                {saved ? 'Saved' : 'Save Settings'}
+              {settings.aiMode !== 'local-only' && hasConfiguredApiKey(settings) && (
+                <Alert severity={apiKeyCheck.status === 'invalid' ? 'warning' : apiKeyCheck.status === 'valid' ? 'success' : 'info'}>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    {apiKeyCheck.status === 'checking' && <CircularProgress size={16} />}
+                    <Typography variant="body2">
+                      {apiKeyCheck.status === 'checking'
+                        ? `Checking ${apiProviderName(settings.apiProvider)} API key...`
+                        : apiKeyCheck.message}
+                    </Typography>
+                  </Stack>
+                </Alert>
+              )}
+
+              <Button
+                variant="contained"
+                startIcon={apiKeyCheck.status === 'checking' ? <CircularProgress color="inherit" size={18} /> : <SaveIcon />}
+                onClick={handleSaveSettings}
+                disabled={apiKeyCheck.status === 'checking'}
+              >
+                {apiKeyCheck.status === 'checking' ? 'Checking Key' : saved ? 'Saved' : 'Save Settings'}
               </Button>
             </Stack>
           </Paper>

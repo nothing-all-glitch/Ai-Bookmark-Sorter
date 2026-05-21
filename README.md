@@ -1,57 +1,125 @@
-# AI Bookmark Organizer
+<div align="center">
+  <img src="docs/assets/icon.png" alt="AI Bookmark Organizer icon" width="118" />
 
-<p align="center">
-  <img src="docs/assets/icon.png" alt="AI Bookmark Organizer icon" width="112" />
+  <h1>🤖 AI Bookmark Organizer</h1>
+
+  **A Manifest V3 Chrome extension that turns messy bookmark bars into clean, reviewable folder systems.**
+
+  <p>
+    <a href="https://github.com/nothing-all-glitch/Ai-Bookmark-Sorter/releases">
+      <img alt="Latest release" src="https://img.shields.io/badge/release-v0.1.5-2563eb?style=for-the-badge" />
+    </a>
+    <img alt="Chrome Extension" src="https://img.shields.io/badge/Chrome-Manifest%20V3-22c55e?style=for-the-badge&logo=googlechrome&logoColor=white" />
+    <img alt="Built with React" src="https://img.shields.io/badge/React%20%2B%20MUI-UI-06b6d4?style=for-the-badge&logo=react&logoColor=white" />
+    <img alt="Tests with Vitest" src="https://img.shields.io/badge/Vitest-tested-facc15?style=for-the-badge&logo=vitest&logoColor=111827" />
+  </p>
+
+  <p>
+    <a href="#download">Download</a> •
+    <a href="#screenshots">Screenshots</a> •
+    <a href="#features">Features</a> •
+    <a href="#development">Development</a>
+  </p>
+</div>
+
+---
+
+## ✨ Overview
+
+AI Bookmark Organizer scans your existing Chrome bookmarks, suggests smarter folders, lets you preview and edit every proposed move, then applies only the changes you approve into a managed **AI Organized Bookmarks** folder.
+
+It is built to be careful first: bookmark writes are delayed until review, API keys stay in `chrome.storage.local`, and classification falls back from API-based AI to Chrome built-in AI to local heuristics.
+
+<a id="screenshots"></a>
+
+## 📸 Screenshots
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="docs/assets/screenshot-dashboard.png" alt="Dashboard screenshot" />
+      <br />
+      <strong>Dashboard</strong>
+      <br />
+      Scan progress, controls, and run summary.
+    </td>
+    <td width="50%">
+      <img src="docs/assets/screenshot-preview.png" alt="Preview screenshot" />
+      <br />
+      <strong>Review Preview</strong>
+      <br />
+      Expand folders, edit suggestions, and apply selected moves.
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2">
+      <img src="docs/assets/screenshot-settings.png" alt="Settings screenshot" />
+      <br />
+      <strong>Settings</strong>
+      <br />
+      Configure provider options, API keys, and classification behavior.
+    </td>
+  </tr>
+</table>
+
+<a id="download"></a>
+
+## 🚀 Download
+
+Grab the latest ready-to-install ZIP from GitHub Releases:
+
+<p>
+  <a href="https://github.com/nothing-all-glitch/Ai-Bookmark-Sorter/releases/download/v0.1.5/ai-bookmark-organizer-v0.1.5.zip">
+    <img alt="Download AI Bookmark Organizer v0.1.5" src="https://img.shields.io/badge/Download-v0.1.5-111827?style=for-the-badge&logo=github" />
+  </a>
+  <a href="https://github.com/nothing-all-glitch/Ai-Bookmark-Sorter/releases">
+    <img alt="View all releases" src="https://img.shields.io/badge/View-all%20releases-64748b?style=for-the-badge&logo=github" />
+  </a>
 </p>
 
-Manifest V3 Chrome extension that scans existing bookmarks, previews AI-suggested folder moves, and applies approved changes into a managed `AI Organized Bookmarks` folder.
-
-## Screenshots
-
-<p align="center">
-  <img src="docs/assets/screenshot-dashboard.png" alt="AI Bookmark Organizer dashboard screenshot" width="720" />
-</p>
-
-<p align="center">
-  <img src="docs/assets/screenshot-preview.png" alt="AI Bookmark Organizer preview screenshot" width="720" />
-</p>
-
-<p align="center">
-  <img src="docs/assets/screenshot-settings.png" alt="AI Bookmark Organizer settings screenshot" width="720" />
-</p>
-
-## Download
-
-The latest ready-to-install ZIP is available from the GitHub Releases page:
-
-- [Download AI Bookmark Organizer v0.1.4](https://github.com/nothing-all-glitch/Ai-Bookmark-Sorter/releases/download/v0.1.4/ai-bookmark-organizer-v0.1.4.zip)
-- [View all releases](https://github.com/nothing-all-glitch/Ai-Bookmark-Sorter/releases)
-
-## Install In Chrome
+## 🧩 Install In Chrome
 
 Chrome extensions downloaded outside the Chrome Web Store must be loaded manually:
 
-1. Download `ai-bookmark-organizer-v0.1.4.zip` from the release link above.
+1. Download `ai-bookmark-organizer-v0.1.5.zip` from the release link above.
 2. Unzip the downloaded file.
-3. Open Chrome and go to `chrome://extensions`.
+3. Open Chrome and visit `chrome://extensions`.
 4. Enable **Developer Mode** in the top-right corner.
 5. Click **Load unpacked**.
 6. Select the unzipped extension folder.
-7. Pin **AI Bookmark Organizer** from the Chrome extensions menu if you want quick access.
+7. Pin **AI Bookmark Organizer** from the Chrome extensions menu for quick access.
 
 After installation, open the extension, review the proposed bookmark moves, then apply only the ones you want.
 
-## Features
+<a id="features"></a>
 
-- Reads bookmarks through Chrome's `bookmarks` permission.
-- Uses a provider fallback chain: saved API key AI, Chrome built-in AI, then deterministic local heuristics.
-- Stores API keys only in `chrome.storage.local`.
-- Skips bookmarks already inside the managed folder on later runs.
-- Shows progress, pause/cancel controls, Chrome AI setup progress, preview editing, apply selected, and undo last run.
-- Groups suggested moves into an expandable folder tree for easier review.
-- Runs heuristic classification in a Web Worker when available.
+## 🛠️ Features
 
-## Architecture Design
+| Area | What it does |
+| --- | --- |
+| 🔎 Bookmark scanning | Reads bookmarks through Chrome's `bookmarks` permission. |
+| 🧠 AI fallback chain | Tries saved API key AI, Chrome built-in AI, then deterministic local heuristics. |
+| 🧪 API key check | Verifies a saved API key with a tiny test request and clearly shows when API sorting is active. |
+| 🔐 Local key storage | Stores API keys only in `chrome.storage.local`. |
+| 👀 Safe preview | Shows suggested folder moves before writing anything. |
+| ✅ Selective apply | Applies only approved moves into `AI Organized Bookmarks`. |
+| ↩️ Undo support | Keeps an undo plan and run ledger for the last applied organization run. |
+| 🌳 Folder tree review | Groups suggested moves into expandable folders for easier scanning. |
+| ⚙️ Worker-powered heuristics | Runs local classification in a Web Worker when available. |
+| ⏸️ Flow controls | Includes progress, pause, cancel, setup progress, editing, and apply controls. |
+
+## 🧭 How It Works
+
+```mermaid
+flowchart LR
+  Scan["1. Scan bookmarks"] --> Classify["2. Classify with provider chain"]
+  Classify --> Preview["3. Preview suggested moves"]
+  Preview --> Edit["4. Edit or deselect"]
+  Edit --> Apply["5. Apply approved changes"]
+  Apply --> Undo["6. Undo last run if needed"]
+```
+
+## 🏗️ Architecture Design
 
 ```mermaid
 flowchart TD
@@ -88,7 +156,9 @@ Classification is intentionally defensive: the selected API provider runs first 
 
 Bookmark writes are delayed until the user approves the preview. Applied moves go into the managed `AI Organized Bookmarks` folder, while `chrome.storage.local` keeps settings, API keys, the last run summary, and the undo plan inside the current Chrome profile.
 
-## Development
+<a id="development"></a>
+
+## 🧑‍💻 Development
 
 ```bash
 npm install
@@ -98,3 +168,29 @@ npm run build
 ```
 
 Load the built `dist` folder in `chrome://extensions` with Developer Mode enabled.
+
+### Useful Scripts
+
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | Start the Vite development server on `127.0.0.1`. |
+| `npm test` | Run the Vitest suite once. |
+| `npm run test:watch` | Run Vitest in watch mode. |
+| `npm run build` | Type-check and build the production extension. |
+| `npm run preview` | Preview the built app locally. |
+
+## 📦 Tech Stack
+
+<p>
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.9-3178c6?style=flat-square&logo=typescript&logoColor=white" />
+  <img alt="React" src="https://img.shields.io/badge/React-19-61dafb?style=flat-square&logo=react&logoColor=111827" />
+  <img alt="MUI" src="https://img.shields.io/badge/MUI-7-007fff?style=flat-square&logo=mui&logoColor=white" />
+  <img alt="Vite" src="https://img.shields.io/badge/Vite-7-646cff?style=flat-square&logo=vite&logoColor=white" />
+  <img alt="Vitest" src="https://img.shields.io/badge/Vitest-4-6e9f18?style=flat-square&logo=vitest&logoColor=white" />
+</p>
+
+---
+
+<div align="center">
+  <strong>Organize carefully. Review everything. Keep control of your bookmarks.</strong>
+</div>
