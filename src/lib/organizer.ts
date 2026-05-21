@@ -120,10 +120,9 @@ async function classifyWithFallback(
         const notice: ProviderNotice = {
           provider: provider.id,
           severity: 'info',
-          message: `Used ${provider.label} for a batch after an earlier provider failed.`,
+          message: `${provider.label} handled this run after another AI option was unavailable.`,
         };
         notices.push(notice);
-        controls.onNotice?.(notice);
       }
       return { classifications, notices };
     } catch (error) {
@@ -134,10 +133,9 @@ async function classifyWithFallback(
       const notice: ProviderNotice = {
         provider: provider.id,
         severity: provider.id === 'heuristic' ? 'error' : 'warning',
-        message: `Failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        message: error instanceof Error ? error.message : 'Unknown error',
       };
       notices.push(notice);
-      controls.onNotice?.(notice);
     }
   }
 
@@ -245,10 +243,22 @@ export async function createPreview(controls: OrganizerControls = {}): Promise<P
       total: snapshot.candidates.length,
     });
 
-    return { runId, snapshot, taxonomy, previewItems, notices, startedAt };
+    return { runId, snapshot, taxonomy, previewItems, notices: dedupeNotices(notices), startedAt };
   } finally {
     worker.terminate();
   }
+}
+
+function dedupeNotices(notices: ProviderNotice[]): ProviderNotice[] {
+  const seen = new Set<string>();
+  return notices.filter((notice) => {
+    const key = `${notice.provider}:${notice.severity}:${notice.message}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
 }
 
 export async function applyPreview(

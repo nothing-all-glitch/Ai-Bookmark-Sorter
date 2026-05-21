@@ -133,6 +133,54 @@ function ProviderChip({ provider }: { provider: string }) {
   return <Chip size="small" label={providerLabel(provider)} color={color} variant="outlined" />;
 }
 
+function addNoticeOnce(current: ProviderNotice[], notice: ProviderNotice): ProviderNotice[] {
+  const exists = current.some(
+    (item) => item.provider === notice.provider && item.severity === notice.severity && item.message === notice.message,
+  );
+  return exists ? current : [notice, ...current].slice(0, 4);
+}
+
+function friendlyRunNotices(notices: ProviderNotice[], items: PreviewItem[]): ProviderNotice[] {
+  const failedAiProviders = new Set(
+    notices
+      .filter((notice) => notice.provider !== 'heuristic' && notice.severity !== 'info')
+      .map((notice) => notice.provider),
+  );
+  const usedLocalSorting = items.some((item) => item.provider === 'heuristic');
+
+  if (usedLocalSorting && failedAiProviders.size > 1) {
+    return [
+      {
+        provider: 'heuristic',
+        severity: 'info',
+        message: 'Used local sorting for this run because the online or browser AI options were not ready. You can review every suggested move before applying.',
+      },
+    ];
+  }
+
+  if (usedLocalSorting && failedAiProviders.has('chrome-ai')) {
+    return [
+      {
+        provider: 'heuristic',
+        severity: 'info',
+        message: "Used local sorting for this run because Chrome's built-in AI is still setting up. Your preview is ready to review.",
+      },
+    ];
+  }
+
+  if (usedLocalSorting && failedAiProviders.size > 0) {
+    return [
+      {
+        provider: 'heuristic',
+        severity: 'info',
+        message: 'Used local sorting for this run because the selected AI service was unavailable. Your preview is ready to review.',
+      },
+    ];
+  }
+
+  return [];
+}
+
 export default function App() {
   const [tab, setTab] = useState(0);
   const [settings, setSettings] = useState<OrganizeSettings>(DEFAULT_SETTINGS);
@@ -193,7 +241,7 @@ export default function App() {
       signal: controller.signal,
       shouldPause: () => pausedRef.current,
       onProgress: setProgress,
-      onNotice: (notice: ProviderNotice) => setNotices((current) => [notice, ...current].slice(0, 8)),
+      onNotice: (notice: ProviderNotice) => setNotices((current) => addNoticeOnce(current, notice)),
     };
   }
 
@@ -210,6 +258,7 @@ export default function App() {
       setPreview(result);
       setPreviewItems(result.previewItems);
       setSnapshot(result.snapshot);
+      setNotices(friendlyRunNotices(result.notices, result.previewItems));
       setTab(1);
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
@@ -325,7 +374,7 @@ export default function App() {
 
         {notices.map((notice, index) => (
           <Alert key={`${notice.provider}-${index}-${notice.message}`} severity={notice.severity}>
-            {providerLabel(notice.provider)}: {notice.message}
+            {notice.message}
           </Alert>
         ))}
 
