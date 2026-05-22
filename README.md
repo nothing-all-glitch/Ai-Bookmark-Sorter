@@ -7,7 +7,7 @@
 
   <p>
     <a href="https://github.com/nothing-all-glitch/Ai-Bookmark-Sorter/releases">
-      <img alt="Latest release" src="https://img.shields.io/badge/release-v0.1.5-2563eb?style=for-the-badge" />
+      <img alt="Latest release" src="https://img.shields.io/badge/release-v0.1.6-2563eb?style=for-the-badge" />
     </a>
     <img alt="Chrome Extension" src="https://img.shields.io/badge/Chrome-Manifest%20V3-22c55e?style=for-the-badge&logo=googlechrome&logoColor=white" />
     <img alt="Built with React" src="https://img.shields.io/badge/React%20%2B%20MUI-UI-06b6d4?style=for-the-badge&logo=react&logoColor=white" />
@@ -69,8 +69,8 @@ It is built to be careful first: bookmark writes are delayed until review, API k
 Grab the latest ready-to-install ZIP from GitHub Releases:
 
 <p>
-  <a href="https://github.com/nothing-all-glitch/Ai-Bookmark-Sorter/releases/download/v0.1.5/ai-bookmark-organizer-v0.1.5.zip">
-    <img alt="Download AI Bookmark Organizer v0.1.5" src="https://img.shields.io/badge/Download-v0.1.5-111827?style=for-the-badge&logo=github" />
+  <a href="https://github.com/nothing-all-glitch/Ai-Bookmark-Sorter/releases/download/v0.1.6/ai-bookmark-organizer-v0.1.6.zip">
+    <img alt="Download AI Bookmark Organizer v0.1.6" src="https://img.shields.io/badge/Download-v0.1.6-111827?style=for-the-badge&logo=github" />
   </a>
   <a href="https://github.com/nothing-all-glitch/Ai-Bookmark-Sorter/releases">
     <img alt="View all releases" src="https://img.shields.io/badge/View-all%20releases-64748b?style=for-the-badge&logo=github" />
@@ -81,7 +81,7 @@ Grab the latest ready-to-install ZIP from GitHub Releases:
 
 Chrome extensions downloaded outside the Chrome Web Store must be loaded manually:
 
-1. Download `ai-bookmark-organizer-v0.1.5.zip` from the release link above.
+1. Download `ai-bookmark-organizer-v0.1.6.zip` from the release link above.
 2. Unzip the downloaded file.
 3. Open Chrome and visit `chrome://extensions`.
 4. Enable **Developer Mode** in the top-right corner.
