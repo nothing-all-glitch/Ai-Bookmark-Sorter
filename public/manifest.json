@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "AI Bookmark Organizer",
   "short_name": "Bookmark AI",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Preview and organize Chrome bookmarks into an AI-managed folder with provider fallbacks.",
   "minimum_chrome_version": "116",
   "permissions": [
