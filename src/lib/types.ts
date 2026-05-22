@@ -28,8 +28,8 @@ export const DEFAULT_SETTINGS: OrganizeSettings = {
   customEndpoint: 'https://api.openai.com/v1/chat/completions',
   customModel: 'gpt-4.1-mini',
   minConfidence: 0.55,
-  batchSize: 16,
-  concurrency: 3,
+  batchSize: 32,
+  concurrency: 4,
   allowNewFolders: true,
 };
 
@@ -172,6 +172,7 @@ export interface AiProvider {
   id: ProviderId;
   label: string;
   classifyBatch(input: ClassifyBatchInput): Promise<Classification[]>;
+  dispose?(): void | Promise<void>;
 }
 
 export interface OrganizerControls {

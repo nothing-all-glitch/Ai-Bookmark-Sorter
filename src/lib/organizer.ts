@@ -43,6 +43,7 @@ export interface ApplyResult {
 }
 
 const sleep = (ms: number) => new Promise((resolve) => globalThis.setTimeout(resolve, ms));
+const APPLY_CHECKPOINT_SIZE = 10;
 
 function chunk<T>(items: T[], size: number): T[][] {
   const chunks: T[][] = [];
@@ -98,11 +99,16 @@ async function classifyWithFallback(
   settings: OrganizeSettings,
   providers: AiProvider[],
   controls: OrganizerControls,
+  unavailableProviders: Set<string>,
 ): Promise<{ classifications: Classification[]; notices: ProviderNotice[] }> {
   const notices: ProviderNotice[] = [];
 
   for (const provider of providers) {
     assertNotAborted(controls.signal);
+    if (unavailableProviders.has(provider.id)) {
+      continue;
+    }
+
     try {
       const classifications = await provider.classifyBatch({
         bookmarks: batch,
@@ -130,10 +136,17 @@ async function classifyWithFallback(
         message: error instanceof Error ? error.message : 'Unknown error',
       };
       notices.push(notice);
+      if (provider.id !== 'heuristic') {
+        unavailableProviders.add(provider.id);
+      }
     }
   }
 
   throw new Error('All classification providers failed.');
+}
+
+async function disposeProviders(providers: AiProvider[]): Promise<void> {
+  await Promise.all(providers.map((provider) => provider.dispose?.()));
 }
 
 async function runConcurrently<T, R>(
@@ -180,6 +193,7 @@ export async function createPreview(controls: OrganizerControls = {}): Promise<P
 
   const providers = buildProviderChain(settings, worker);
   const batches = chunk(snapshot.candidates, Math.max(1, settings.batchSize));
+  const unavailableProviders = new Set<string>();
   let completedBatches = 0;
 
   controls.onProgress?.({
@@ -199,7 +213,7 @@ export async function createPreview(controls: OrganizerControls = {}): Promise<P
           assertNotAborted(controls.signal);
         }
 
-        const result = await classifyWithFallback(batch, taxonomy, settings, providers, controls);
+        const result = await classifyWithFallback(batch, taxonomy, settings, providers, controls, unavailableProviders);
         notices.push(...result.notices);
         completedBatches += 1;
         controls.onProgress?.({
@@ -239,6 +253,7 @@ export async function createPreview(controls: OrganizerControls = {}): Promise<P
 
     return { runId, snapshot, taxonomy, previewItems, notices: dedupeNotices(notices), startedAt };
   } finally {
+    await disposeProviders(providers);
     worker.terminate();
   }
 }
@@ -310,14 +325,13 @@ export async function applyPreview(
         timestamp: Date.now(),
       };
       ledgerEntries.push(ledgerEntry);
-      await Promise.all([
-        saveUndoPlan({
+      if (undoMoves.length % APPLY_CHECKPOINT_SIZE === 0) {
+        await saveUndoPlan({
           runId: preview.runId,
           createdAt: Date.now(),
           moves: undoMoves,
-        }),
-        appendLedger([ledgerEntry]),
-      ]);
+        });
+      }
     } catch (error) {
       failed += 1;
       controls.onNotice?.({
@@ -342,6 +356,9 @@ export async function applyPreview(
   };
 
   await saveUndoPlan(undoPlan);
+  if (ledgerEntries.length > 0) {
+    await appendLedger(ledgerEntries);
+  }
 
   const notices = preview.notices;
   const summary: RunSummary = {

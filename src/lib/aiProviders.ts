@@ -47,6 +47,8 @@ type RawClassification = {
   reason?: unknown;
 };
 
+type ChromeAiSession = Awaited<ReturnType<NonNullable<typeof LanguageModel>['create']>>;
+
 const CHROME_AI_LANGUAGE_OPTIONS = {
   expectedInputs: [{ type: 'text', languages: ['en'] }],
   expectedOutputs: [{ type: 'text', languages: ['en'] }],
@@ -63,19 +65,24 @@ function chromeAiSessionOptions(
   };
 }
 
+function truncateText(value: string, maxLength: number): string {
+  return value.length <= maxLength ? value : `${value.slice(0, maxLength - 1)}...`;
+}
+
 function buildPrompt(bookmarks: BookmarkCandidate[], taxonomy: string[], allowNewFolders: boolean): string {
   const compactBookmarks = bookmarks.map((bookmark) => ({
-    bookmarkId: bookmark.id,
-    title: bookmark.title,
-    domain: bookmark.domain,
-    url: bookmark.url,
-    currentFolder: bookmark.currentPath,
+    i: bookmark.id,
+    t: truncateText(bookmark.title, 120),
+    d: bookmark.domain,
+    u: truncateText(bookmark.url, 180),
+    p: truncateText(bookmark.currentPath, 100),
   }));
 
   return [
     'You organize browser bookmarks into concise folder names.',
     'Return only valid JSON. No markdown. No prose.',
     'The JSON shape must be: {"classifications":[{"bookmarkId":"...","folder":"...","confidence":0.0,"reason":"short reason"}]}',
+    'Input bookmark keys are i=id, t=title, d=domain, u=url, p=current folder.',
     'Confidence must be a number from 0 to 1.',
     `Use these folder names when suitable: ${taxonomy.join(', ')}.`,
     allowNewFolders
@@ -84,6 +91,12 @@ function buildPrompt(bookmarks: BookmarkCandidate[], taxonomy: string[], allowNe
     'Prefer broad, reusable folders over very specific one-off folders.',
     `Bookmarks: ${JSON.stringify(compactBookmarks)}`,
   ].join('\n');
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new DOMException('The operation was cancelled.', 'AbortError');
+  }
 }
 
 function extractJson(text: string): unknown {
@@ -161,6 +174,9 @@ async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit, tim
   const controller = new AbortController();
   const timeout = globalThis.setTimeout(() => controller.abort(), timeoutMs);
   const abort = () => controller.abort();
+  if (signal?.aborted) {
+    controller.abort();
+  }
   signal?.addEventListener('abort', abort, { once: true });
 
   try {
@@ -284,37 +300,71 @@ export function createOpenAiCompatibleProvider(): AiProvider {
 }
 
 export function createChromeAiProvider(): AiProvider {
+  let availabilityPromise: Promise<ChromeAiAvailability> | null = null;
+  let sessionPromise: Promise<ChromeAiSession> | null = null;
+  let session: ChromeAiSession | null = null;
+  let promptQueue: Promise<unknown> = Promise.resolve();
+
+  async function getAvailableLanguageModel(signal?: AbortSignal): Promise<NonNullable<typeof LanguageModel>> {
+    throwIfAborted(signal);
+    if (typeof LanguageModel === 'undefined') {
+      throw new ProviderError('Chrome built-in AI is not available in this browser.', 'chrome-ai');
+    }
+
+    availabilityPromise ??= LanguageModel.availability(CHROME_AI_LANGUAGE_OPTIONS);
+    const availability = await availabilityPromise;
+    throwIfAborted(signal);
+
+    if (availability === 'unavailable') {
+      throw new ProviderError('Chrome built-in AI is unavailable on this device/profile.', 'chrome-ai');
+    }
+    if (availability !== 'available') {
+      throw new ProviderError('Chrome built-in AI needs its local model download before it can classify bookmarks.', 'chrome-ai');
+    }
+
+    return LanguageModel;
+  }
+
+  async function getSession(signal?: AbortSignal): Promise<ChromeAiSession> {
+    const languageModel = await getAvailableLanguageModel(signal);
+    sessionPromise ??= languageModel.create(chromeAiSessionOptions(undefined, signal)).then((createdSession) => {
+      session = createdSession;
+      return createdSession;
+    });
+    const createdSession = await sessionPromise;
+    throwIfAborted(signal);
+    return createdSession;
+  }
+
   return {
     id: 'chrome-ai',
     label: 'Chrome built-in AI',
-    async classifyBatch({ bookmarks, taxonomy, settings }: ClassifyBatchInput) {
-      if (typeof LanguageModel === 'undefined') {
-        throw new ProviderError('Chrome built-in AI is not available in this browser.', 'chrome-ai');
-      }
+    async classifyBatch({ bookmarks, taxonomy, settings, signal }: ClassifyBatchInput) {
+      const prompt = buildPrompt(bookmarks, taxonomy, settings.allowNewFolders);
+      const queuedPrompt = promptQueue
+        .catch(() => undefined)
+        .then(async () => {
+          throwIfAborted(signal);
+          const activeSession = await getSession(signal);
+          return activeSession.prompt(prompt, signal ? { signal } : undefined);
+        });
 
-      const availability = await LanguageModel.availability(CHROME_AI_LANGUAGE_OPTIONS);
-      if (availability === 'unavailable') {
-        throw new ProviderError('Chrome built-in AI is unavailable on this device/profile.', 'chrome-ai');
-      }
-      if (availability !== 'available') {
-        throw new ProviderError('Chrome built-in AI needs its local model download before it can classify bookmarks.', 'chrome-ai');
-      }
+      promptQueue = queuedPrompt.catch(() => undefined);
+      const text = await queuedPrompt;
 
-      const session = await LanguageModel.create(chromeAiSessionOptions());
-
-      try {
-        const text = await session.prompt(buildPrompt(bookmarks, taxonomy, settings.allowNewFolders));
-        return validateClassifications(
-          extractJson(text),
-          bookmarks,
-          taxonomy,
-          'chrome-ai',
-          settings.minConfidence,
-          settings.allowNewFolders,
-        );
-      } finally {
-        session.destroy?.();
-      }
+      return validateClassifications(
+        extractJson(text),
+        bookmarks,
+        taxonomy,
+        'chrome-ai',
+        settings.minConfidence,
+        settings.allowNewFolders,
+      );
+    },
+    dispose() {
+      session?.destroy?.();
+      session = null;
+      sessionPromise = null;
     },
   };
 }

@@ -88,7 +88,7 @@ describe('AI provider helpers', () => {
     expect(getConfiguredApiProvider(DEFAULT_SETTINGS)).toBeNull();
   });
 
-  it('passes expected English input and output languages to Chrome AI', async () => {
+  it('passes expected English options to Chrome AI and reuses the run session', async () => {
     const availability = vi.fn().mockResolvedValue('available');
     const prompt = vi.fn().mockResolvedValue(
       JSON.stringify({
@@ -113,14 +113,22 @@ describe('AI provider helpers', () => {
       taxonomy: ['Development', 'Other'],
       settings: DEFAULT_SETTINGS,
     });
+    await provider.classifyBatch({
+      bookmarks,
+      taxonomy: ['Development', 'Other'],
+      settings: DEFAULT_SETTINGS,
+    });
+    await provider.dispose?.();
 
     const languageOptions = {
       expectedInputs: [{ type: 'text', languages: ['en'] }],
       expectedOutputs: [{ type: 'text', languages: ['en'] }],
     };
     expect(availability).toHaveBeenCalledWith(languageOptions);
+    expect(availability).toHaveBeenCalledOnce();
     expect(create).toHaveBeenCalledWith(languageOptions);
-    expect(prompt).toHaveBeenCalledOnce();
+    expect(create).toHaveBeenCalledOnce();
+    expect(prompt).toHaveBeenCalledTimes(2);
     expect(destroy).toHaveBeenCalledOnce();
   });
 
