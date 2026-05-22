@@ -67,16 +67,23 @@ import {
   type PreviewResult,
 } from './lib/organizer';
 import {
+  loadActiveOperation,
   loadLastRunSummary,
+  loadPreviewDraft,
   loadSettings,
   loadUndoPlan,
+  saveActiveOperation,
+  savePreviewDraft,
   saveSettings,
 } from './lib/storage';
 import {
   DEFAULT_SETTINGS,
   MANAGED_FOLDER_NAME,
+  type ActiveOperation,
+  type ActiveOperationKind,
   type BookmarkSnapshot,
   type OrganizeSettings,
+  type PreviewDraft,
   type PreviewItem,
   type ProgressUpdate,
   type ProviderNotice,
@@ -90,6 +97,8 @@ const idleProgress: ProgressUpdate = {
   completed: 0,
   total: 1,
 };
+
+const terminalProgressPhases = new Set<ProgressUpdate['phase']>(['idle', 'preview', 'complete', 'cancelled', 'error']);
 
 function formatDate(value?: number): string {
   if (!value) {
@@ -118,6 +127,20 @@ function progressValue(progress: ProgressUpdate): number {
     return 0;
   }
   return Math.min(100, Math.round((progress.completed / progress.total) * 100));
+}
+
+function makeOperationId(kind: ActiveOperationKind): string {
+  return `${kind}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+function interruptedOperationMessage(operation: ActiveOperation): string {
+  const labels: Record<ActiveOperationKind, string> = {
+    preview: 'Bookmark sorting',
+    apply: 'Applying bookmark moves',
+    undo: 'Undoing bookmark moves',
+    'chrome-ai-setup': 'Chrome AI setup',
+  };
+  return `${labels[operation.kind]} was interrupted when the extension closed. Start it again to continue.`;
 }
 
 function Stat({ label, value, icon }: { label: string; value: string | number; icon: React.ReactNode }) {
@@ -245,6 +268,45 @@ function initialApiKeyCheckState(settings: OrganizeSettings): ApiKeyCheckState {
   };
 }
 
+function reconcilePreviewDraft(draft: PreviewDraft | null, latestSnapshot: BookmarkSnapshot): PreviewDraft | null {
+  if (!draft) {
+    return null;
+  }
+
+  const candidatesById = new Map(latestSnapshot.candidates.map((candidate) => [candidate.id, candidate]));
+  const previewItems = draft.previewItems
+    .map((item): PreviewItem | null => {
+      const candidate = candidatesById.get(item.id);
+      if (!candidate || candidate.url !== item.url) {
+        return null;
+      }
+
+      return {
+        ...candidate,
+        targetFolder: item.targetFolder,
+        confidence: item.confidence,
+        provider: item.provider,
+        reason: item.reason,
+        selected: item.selected,
+      };
+    })
+    .filter((item): item is PreviewItem => Boolean(item));
+
+  if (previewItems.length === 0) {
+    return null;
+  }
+
+  const previewFolders = new Set(previewItems.map((item) => item.targetFolder));
+  const expandedFolders = draft.expandedFolders.filter((folder) => previewFolders.has(folder));
+
+  return {
+    ...draft,
+    snapshot: latestSnapshot,
+    previewItems,
+    expandedFolders,
+  };
+}
+
 export default function App() {
   const [tab, setTab] = useState(0);
   const [settings, setSettings] = useState<OrganizeSettings>(DEFAULT_SETTINGS);
@@ -269,6 +331,8 @@ export default function App() {
   const apiKeyCheckAbortRef = useRef<AbortController | null>(null);
   const chromeAiSetupAbortRef = useRef<AbortController | null>(null);
   const pausedRef = useRef(false);
+  const operationSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const previewDraftSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   const selectedCount = useMemo(() => previewItems.filter((item) => item.selected).length, [previewItems]);
   const previewGroups = useMemo(() => {
@@ -290,22 +354,65 @@ export default function App() {
   useEffect(() => {
     let mounted = true;
     async function boot() {
-      const [savedSettings, initialSnapshot, summary, undo, aiAvailability] = await Promise.all([
+      const [savedSettings, initialSnapshot, summary, undo, aiAvailability, draft, activeOperation] = await Promise.all([
         loadSettings(),
         scanBookmarks(),
         loadLastRunSummary(),
         loadUndoPlan(),
         getChromeAiAvailability(),
+        loadPreviewDraft(),
+        loadActiveOperation(),
       ]);
       if (!mounted) {
         return;
       }
+      const restoredDraft = reconcilePreviewDraft(draft, initialSnapshot);
       setSettings(savedSettings);
       setSnapshot(initialSnapshot);
       setLastRun(summary);
       setUndoPlan(undo);
       setChromeAiAvailability(aiAvailability);
       setApiKeyCheck(initialApiKeyCheckState(savedSettings));
+      if (restoredDraft) {
+        const expanded =
+          restoredDraft.expandedFolders.length > 0
+            ? restoredDraft.expandedFolders
+            : restoredDraft.previewItems.map((item) => item.targetFolder);
+        setPreview(restoredDraft);
+        setPreviewItems(restoredDraft.previewItems);
+        setExpandedFolders(new Set(expanded));
+        setNotices(friendlyRunNotices(restoredDraft.notices, restoredDraft.previewItems));
+        setProgress({
+          phase: 'preview',
+          label: `Restored ${restoredDraft.previewItems.length} suggested moves`,
+          completed: restoredDraft.previewItems.length,
+          total: restoredDraft.snapshot.candidates.length,
+        });
+        setTab(1);
+      } else if (draft) {
+        await savePreviewDraft(null);
+      }
+      if (activeOperation && !terminalProgressPhases.has(activeOperation.progress.phase)) {
+        const interruptedProgress = {
+          ...activeOperation.progress,
+          phase: 'error' as const,
+          label: interruptedOperationMessage(activeOperation),
+        };
+        setProgress(interruptedProgress);
+        setNotices((current) =>
+          addNoticeOnce(current, {
+            provider: activeOperation.kind === 'chrome-ai-setup' ? 'chrome-ai' : 'heuristic',
+            severity: 'warning',
+            message:
+              activeOperation.kind === 'apply' && undo?.moves.length
+                ? `${interruptedProgress.label} Undo is available for ${undo.moves.length} moves that finished before the interruption.`
+                : interruptedProgress.label,
+          }),
+        );
+        await saveActiveOperation(null);
+      } else if (activeOperation) {
+        await saveActiveOperation(null);
+      }
     }
     boot().catch((error) => {
       setNotices([{ provider: 'heuristic', severity: 'error', message: error instanceof Error ? error.message : 'Startup failed' }]);
@@ -319,6 +426,84 @@ export default function App() {
     pausedRef.current = paused;
   }, [paused]);
 
+  function handleOperationStorageError(error: unknown) {
+    setNotices((current) =>
+      addNoticeOnce(current, {
+        provider: 'heuristic',
+        severity: 'warning',
+        message: error instanceof Error ? `Could not save operation state: ${error.message}` : 'Could not save operation state.',
+      }),
+    );
+  }
+
+  function handlePreviewDraftStorageError(error: unknown) {
+    setNotices((current) =>
+      addNoticeOnce(current, {
+        provider: 'heuristic',
+        severity: 'warning',
+        message: error instanceof Error ? `Could not save preview draft: ${error.message}` : 'Could not save preview draft.',
+      }),
+    );
+  }
+
+  function saveOperationState(operation: ActiveOperation | null): Promise<void> {
+    const nextSave = operationSaveQueueRef.current
+      .catch(() => undefined)
+      .then(() => saveActiveOperation(operation));
+    operationSaveQueueRef.current = nextSave.catch(handleOperationStorageError);
+    return operationSaveQueueRef.current;
+  }
+
+  function savePreviewDraftState(draft: PreviewDraft | null): Promise<void> {
+    const nextSave = previewDraftSaveQueueRef.current
+      .catch(() => undefined)
+      .then(() => savePreviewDraft(draft));
+    previewDraftSaveQueueRef.current = nextSave.catch(handlePreviewDraftStorageError);
+    return previewDraftSaveQueueRef.current;
+  }
+
+  function startActiveOperation(
+    kind: ActiveOperationKind,
+    label: string,
+    initialProgress: ProgressUpdate,
+  ): ActiveOperation {
+    const operation: ActiveOperation = {
+      id: makeOperationId(kind),
+      kind,
+      label,
+      progress: initialProgress,
+      startedAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    setProgress(initialProgress);
+    saveOperationState(operation);
+    return operation;
+  }
+
+  function updateActiveOperation(operation: ActiveOperation, progressUpdate: ProgressUpdate) {
+    setProgress(progressUpdate);
+    saveOperationState({
+      ...operation,
+      progress: progressUpdate,
+      updatedAt: Date.now(),
+    });
+  }
+
+  useEffect(() => {
+    if (!preview) {
+      return;
+    }
+
+    const draft: PreviewDraft = {
+      ...preview,
+      previewItems,
+      expandedFolders: [...expandedFolders],
+      updatedAt: Date.now(),
+    };
+
+    savePreviewDraftState(draft);
+  }, [expandedFolders, preview, previewItems]);
+
   async function refreshSnapshot() {
     setSnapshot(await scanBookmarks());
   }
@@ -327,13 +512,13 @@ export default function App() {
     setChromeAiAvailability(await getChromeAiAvailability());
   }
 
-  function makeControls() {
+  function makeControls(operation: ActiveOperation) {
     const controller = new AbortController();
     abortRef.current = controller;
     return {
       signal: controller.signal,
       shouldPause: () => pausedRef.current,
-      onProgress: setProgress,
+      onProgress: (progressUpdate: ProgressUpdate) => updateActiveOperation(operation, progressUpdate),
       onNotice: (notice: ProviderNotice) => setNotices((current) => addNoticeOnce(current, notice)),
     };
   }
@@ -344,22 +529,36 @@ export default function App() {
     setPreview(null);
     setPreviewItems([]);
     setNotices([]);
-    setProgress({ phase: 'scanning', label: 'Scanning bookmarks', completed: 0, total: 1 });
+    const operation = startActiveOperation('preview', 'Bookmark sorting', {
+      phase: 'scanning',
+      label: 'Scanning bookmarks',
+      completed: 0,
+      total: 1,
+    });
 
     try {
-      const result = await createPreview(makeControls());
+      await savePreviewDraftState(null);
+      const result = await createPreview(makeControls(operation));
+      const expandedFoldersForResult = result.previewItems.map((item) => item.targetFolder);
+      savePreviewDraftState({
+        ...result,
+        expandedFolders: expandedFoldersForResult,
+        updatedAt: Date.now(),
+      });
       setPreview(result);
       setPreviewItems(result.previewItems);
       setSnapshot(result.snapshot);
-      setExpandedFolders(new Set(result.previewItems.map((item) => item.targetFolder)));
+      setExpandedFolders(new Set(expandedFoldersForResult));
       setNotices(friendlyRunNotices(result.notices, result.previewItems));
       setTab(1);
+      saveOperationState(null);
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
         setProgress({ phase: 'cancelled', label: 'Cancelled', completed: 0, total: 1 });
       } else {
         setProgress({ phase: 'error', label: error instanceof Error ? error.message : 'Preview failed', completed: 0, total: 1 });
       }
+      saveOperationState(null);
     } finally {
       setBusy(false);
       abortRef.current = null;
@@ -372,20 +571,31 @@ export default function App() {
     }
     setBusy(true);
     setPaused(false);
+    const selectedItems = previewItems.filter((item) => item.selected);
+    const operation = startActiveOperation('apply', 'Applying bookmark moves', {
+      phase: 'applying',
+      label: `Moving ${selectedItems.length} bookmarks`,
+      completed: 0,
+      total: selectedItems.length,
+    });
     try {
-      const result = await applyPreview(preview, previewItems, makeControls());
+      const result = await applyPreview(preview, previewItems, makeControls(operation));
       setLastRun(result.summary);
       setUndoPlan(result.undoPlan);
       setPreview(null);
       setPreviewItems([]);
+      setExpandedFolders(new Set());
+      savePreviewDraftState(null);
       await refreshSnapshot();
       setTab(0);
+      saveOperationState(null);
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
         setProgress({ phase: 'cancelled', label: 'Cancelled', completed: 0, total: 1 });
       } else {
         setProgress({ phase: 'error', label: error instanceof Error ? error.message : 'Apply failed', completed: 0, total: 1 });
       }
+      saveOperationState(null);
     } finally {
       setBusy(false);
       abortRef.current = null;
@@ -397,16 +607,24 @@ export default function App() {
       return;
     }
     setBusy(true);
+    const operation = startActiveOperation('undo', 'Undoing bookmark moves', {
+      phase: 'applying',
+      label: `Restoring ${undoPlan.moves.length} bookmarks`,
+      completed: 0,
+      total: undoPlan.moves.length,
+    });
     try {
-      const restored = await undoLastRun(undoPlan, makeControls());
+      const restored = await undoLastRun(undoPlan, makeControls(operation));
       setUndoPlan(null);
       setNotices((current) => [
         { provider: 'heuristic', severity: 'info', message: `Restored ${restored} bookmarks from the last run.` },
         ...current,
       ]);
       await refreshSnapshot();
+      saveOperationState(null);
     } catch (error) {
       setProgress({ phase: 'error', label: error instanceof Error ? error.message : 'Undo failed', completed: 0, total: 1 });
+      saveOperationState(null);
     } finally {
       setBusy(false);
       abortRef.current = null;
@@ -502,9 +720,23 @@ export default function App() {
     setChromeAiSetupBusy(true);
     setChromeAiSetupProgress(0);
     setNotices([]);
+    const operation = startActiveOperation('chrome-ai-setup', 'Chrome AI setup', {
+      phase: 'setup',
+      label: 'Starting Chrome AI setup',
+      completed: 0,
+      total: 100,
+    });
 
     try {
-      await setupChromeAiModel(setChromeAiSetupProgress, controller.signal);
+      await setupChromeAiModel((setupProgress) => {
+        setChromeAiSetupProgress(setupProgress);
+        updateActiveOperation(operation, {
+          phase: 'setup',
+          label: `Downloading local AI model ${setupProgress}%`,
+          completed: setupProgress,
+          total: 100,
+        });
+      }, controller.signal);
       await refreshChromeAiStatus();
       setNotices((current) =>
         addNoticeOnce(current, {
@@ -513,6 +745,7 @@ export default function App() {
           message: 'Chrome AI is ready. Future runs can use browser-based sorting before local fallback.',
         }),
       );
+      saveOperationState(null);
     } catch (error) {
       await refreshChromeAiStatus();
       setNotices((current) =>
@@ -525,6 +758,7 @@ export default function App() {
               : 'Chrome AI could not finish setup right now. Local sorting is still available.',
         }),
       );
+      saveOperationState(null);
     } finally {
       setChromeAiSetupBusy(false);
       chromeAiSetupAbortRef.current = null;

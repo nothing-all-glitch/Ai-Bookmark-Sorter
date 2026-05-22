@@ -27,6 +27,7 @@ import type {
   LedgerEntry,
   OrganizerControls,
   OrganizeSettings,
+  PreviewResult,
   PreviewItem,
   ProviderNotice,
   RunSummary,
@@ -34,14 +35,7 @@ import type {
   UndoPlan,
 } from './types';
 
-export interface PreviewResult {
-  runId: string;
-  snapshot: BookmarkSnapshot;
-  taxonomy: string[];
-  previewItems: PreviewItem[];
-  notices: ProviderNotice[];
-  startedAt: number;
-}
+export type { PreviewResult } from './types';
 
 export interface ApplyResult {
   summary: RunSummary;
@@ -304,7 +298,7 @@ export async function applyPreview(
 
       await moveBookmark(item.id, targetParentId);
       undoMoves.push(undoMove);
-      ledgerEntries.push({
+      const ledgerEntry = {
         runId: preview.runId,
         bookmarkId: item.id,
         urlHash: hashUrl(item.url),
@@ -314,7 +308,16 @@ export async function applyPreview(
         provider: item.provider,
         confidence: item.confidence,
         timestamp: Date.now(),
-      });
+      };
+      ledgerEntries.push(ledgerEntry);
+      await Promise.all([
+        saveUndoPlan({
+          runId: preview.runId,
+          createdAt: Date.now(),
+          moves: undoMoves,
+        }),
+        appendLedger([ledgerEntry]),
+      ]);
     } catch (error) {
       failed += 1;
       controls.onNotice?.({
@@ -338,7 +341,7 @@ export async function applyPreview(
     moves: undoMoves,
   };
 
-  await Promise.all([saveUndoPlan(undoPlan), appendLedger(ledgerEntries)]);
+  await saveUndoPlan(undoPlan);
 
   const notices = preview.notices;
   const summary: RunSummary = {

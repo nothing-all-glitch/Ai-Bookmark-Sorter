@@ -3,7 +3,7 @@ export const MANAGED_FOLDER_NAME = 'AI Organized Bookmarks';
 export type AiMode = 'api-first' | 'no-key-first' | 'local-only';
 export type ApiProvider = 'gemini' | 'openai-compatible';
 export type ProviderId = 'gemini' | 'openai-compatible' | 'chrome-ai' | 'heuristic';
-export type ProgressPhase = 'idle' | 'scanning' | 'classifying' | 'preview' | 'applying' | 'complete' | 'cancelled' | 'error';
+export type ProgressPhase = 'idle' | 'scanning' | 'classifying' | 'preview' | 'applying' | 'setup' | 'complete' | 'cancelled' | 'error';
 
 export interface OrganizeSettings {
   aiMode: AiMode;
@@ -87,11 +87,36 @@ export interface ProviderNotice {
   severity: 'info' | 'success' | 'warning' | 'error';
 }
 
+export interface PreviewResult {
+  runId: string;
+  snapshot: BookmarkSnapshot;
+  taxonomy: string[];
+  previewItems: PreviewItem[];
+  notices: ProviderNotice[];
+  startedAt: number;
+}
+
+export interface PreviewDraft extends PreviewResult {
+  expandedFolders: string[];
+  updatedAt: number;
+}
+
 export interface ProgressUpdate {
   phase: ProgressPhase;
   label: string;
   completed: number;
   total: number;
+}
+
+export type ActiveOperationKind = 'preview' | 'apply' | 'undo' | 'chrome-ai-setup';
+
+export interface ActiveOperation {
+  id: string;
+  kind: ActiveOperationKind;
+  label: string;
+  progress: ProgressUpdate;
+  startedAt: number;
+  updatedAt: number;
 }
 
 export interface RunSummary {

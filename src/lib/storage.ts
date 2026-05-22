@@ -1,15 +1,27 @@
-import { DEFAULT_SETTINGS, type LedgerEntry, type OrganizeSettings, type RunSummary, type UndoPlan } from './types';
+import {
+  DEFAULT_SETTINGS,
+  type ActiveOperation,
+  type LedgerEntry,
+  type OrganizeSettings,
+  type PreviewDraft,
+  type RunSummary,
+  type UndoPlan,
+} from './types';
 
 const SETTINGS_KEY = 'settings';
 const LEDGER_KEY = 'runLedger';
 const UNDO_KEY = 'lastUndoPlan';
 const LAST_RUN_KEY = 'lastRunSummary';
+const PREVIEW_DRAFT_KEY = 'previewDraft';
+const ACTIVE_OPERATION_KEY = 'activeOperation';
 
 type StorageShape = {
   settings?: Partial<OrganizeSettings>;
   runLedger?: LedgerEntry[];
   lastUndoPlan?: UndoPlan | null;
   lastRunSummary?: RunSummary | null;
+  previewDraft?: PreviewDraft | null;
+  activeOperation?: ActiveOperation | null;
 };
 
 function hasChromeStorage(): boolean {
@@ -69,4 +81,20 @@ export async function loadLastRunSummary(): Promise<RunSummary | null> {
 
 export async function saveLastRunSummary(summary: RunSummary | null): Promise<void> {
   await setLocal({ lastRunSummary: summary });
+}
+
+export async function loadPreviewDraft(): Promise<PreviewDraft | null> {
+  return (await getLocal(PREVIEW_DRAFT_KEY)) ?? null;
+}
+
+export async function savePreviewDraft(draft: PreviewDraft | null): Promise<void> {
+  await setLocal({ previewDraft: draft });
+}
+
+export async function loadActiveOperation(): Promise<ActiveOperation | null> {
+  return (await getLocal(ACTIVE_OPERATION_KEY)) ?? null;
+}
+
+export async function saveActiveOperation(operation: ActiveOperation | null): Promise<void> {
+  await setLocal({ activeOperation: operation });
 }
