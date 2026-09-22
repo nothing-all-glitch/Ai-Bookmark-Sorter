@@ -23,7 +23,7 @@ export const DEFAULT_SETTINGS: OrganizeSettings = {
   aiMode: 'api-first',
   apiProvider: 'gemini',
   geminiApiKey: '',
-  geminiModel: 'gemini-2.5-flash-lite',
+  geminiModel: 'gemini-3.8-flash',
   customApiKey: '',
   customEndpoint: 'https://api.openai.com/v1/chat/completions',
   customModel: 'gpt-4.1-mini',
