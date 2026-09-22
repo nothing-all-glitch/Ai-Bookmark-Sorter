@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Recall — AI Bookmark Finder",
   "short_name": "Recall",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Find anything you saved. Fast local bookmark search, smart metadata, duplicate review, and optional AI cleanup.",
   "minimum_chrome_version": "116",
   "permissions": [
