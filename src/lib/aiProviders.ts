@@ -214,14 +214,17 @@ export function createGeminiProvider(): AiProvider {
 
       const prompt = buildPrompt(bookmarks, taxonomy, settings.allowNewFolders);
       const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
-        settings.geminiModel,
-      )}:generateContent?key=${encodeURIComponent(settings.geminiApiKey.trim())}`;
+        settings.geminiModel.trim(),
+      )}:generateContent`;
 
       const response = await fetchWithTimeout(
         endpoint,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': settings.geminiApiKey.trim(),
+          },
           body: JSON.stringify({
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             generationConfig: {
@@ -434,10 +437,106 @@ export function getConfiguredApiProvider(settings: OrganizeSettings): AiProvider
   return settings.geminiApiKey.trim() ? createGeminiProvider() : null;
 }
 
+async function readGeminiError(response: Response): Promise<string> {
+  const raw = await response.text();
+  try {
+    const payload = JSON.parse(raw) as {
+      error?: {
+        code?: number;
+        message?: string;
+        status?: string;
+      };
+    };
+    const status = payload.error?.status ? `${payload.error.status}: ` : '';
+    const message = payload.error?.message?.trim();
+    if (message) {
+      return `Gemini ${response.status} — ${status}${message}`;
+    }
+  } catch {
+    // Fall back to a short plain-text response below.
+  }
+
+  const compact = raw.replace(/\s+/g, ' ').trim().slice(0, 320);
+  return compact
+    ? `Gemini ${response.status} — ${compact}`
+    : `Gemini returned HTTP ${response.status}.`;
+}
+
+async function verifyGeminiConnection(
+  settings: OrganizeSettings,
+  signal?: AbortSignal,
+): Promise<ApiKeyCheckResult> {
+  const key = settings.geminiApiKey.trim();
+  const model = settings.geminiModel.trim();
+
+  if (!key) {
+    return { ok: false, provider: 'gemini', message: 'Add a Gemini API key first.' };
+  }
+
+  if (!model) {
+    return { ok: false, provider: 'gemini', message: 'Choose a Gemini model first.' };
+  }
+
+  const endpoint =
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+
+  try {
+    const response = await fetchWithTimeout(
+      endpoint,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': key,
+        },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts: [{ text: 'Reply with OK.' }] }],
+          generationConfig: {
+            temperature: 0,
+            maxOutputTokens: 32,
+          },
+        }),
+      },
+      18000,
+      signal,
+    );
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        provider: 'gemini',
+        message: await readGeminiError(response),
+      };
+    }
+
+    return {
+      ok: true,
+      provider: 'gemini',
+      message: `Gemini API is connected. Model: ${model}.`,
+    };
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw error;
+    }
+    return {
+      ok: false,
+      provider: 'gemini',
+      message:
+        error instanceof Error
+          ? `Gemini request failed: ${error.message}`
+          : 'Gemini request failed before a response was received.',
+    };
+  }
+}
+
 export async function testApiProviderKey(
   settings: OrganizeSettings,
   signal?: AbortSignal,
 ): Promise<ApiKeyCheckResult> {
+  if (settings.apiProvider === 'gemini') {
+    return verifyGeminiConnection(settings, signal);
+  }
+
   const provider = getConfiguredApiProvider(settings);
   if (!provider) {
     return {
@@ -482,7 +581,10 @@ export async function testApiProviderKey(
     return {
       ok: false,
       provider: settings.apiProvider,
-      message: `${provider.label} could not be verified. Check the key, quota, and internet connection.`,
+      message:
+        error instanceof Error
+          ? `${provider.label} verification failed: ${error.message}`
+          : `${provider.label} verification failed.`,
     };
   }
 }
