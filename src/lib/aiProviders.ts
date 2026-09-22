@@ -45,6 +45,8 @@ type RawClassification = {
   folder?: unknown;
   confidence?: unknown;
   reason?: unknown;
+  description?: unknown;
+  tags?: unknown;
 };
 
 type ChromeAiSession = Awaited<ReturnType<NonNullable<typeof LanguageModel>['create']>>;
@@ -81,9 +83,11 @@ function buildPrompt(bookmarks: BookmarkCandidate[], taxonomy: string[], allowNe
   return [
     'You organize browser bookmarks into concise folder names.',
     'Return only valid JSON. No markdown. No prose.',
-    'The JSON shape must be: {"classifications":[{"bookmarkId":"...","folder":"...","confidence":0.0,"reason":"short reason"}]}',
+    'The JSON shape must be: {"classifications":[{"bookmarkId":"...","folder":"...","confidence":0.0,"reason":"short reason","description":"one searchable sentence","tags":["tag-one","tag-two"]}]}',
     'Input bookmark keys are i=id, t=title, d=domain, u=url, p=current folder.',
     'Confidence must be a number from 0 to 1.',
+    'Description should be one concise sentence explaining what the saved page is useful for.',
+    'Tags should contain 2 to 6 short reusable topic keywords, not duplicates of the folder name unless useful.',
     `Use these folder names when suitable: ${taxonomy.join(', ')}.`,
     allowNewFolders
       ? 'You may propose a new folder only when it is clearly better than the supplied taxonomy.'
@@ -139,6 +143,16 @@ export function validateClassifications(
     const folder = typeof item.folder === 'string' ? normalizeFolderName(item.folder) : '';
     const confidence = typeof item.confidence === 'number' ? item.confidence : Number(item.confidence);
     const reason = typeof item.reason === 'string' ? item.reason.slice(0, 140) : undefined;
+    const description =
+      typeof item.description === 'string' ? item.description.trim().slice(0, 220) : undefined;
+    const tags = Array.isArray(item.tags)
+      ? [...new Set(
+          item.tags
+            .filter((tag): tag is string => typeof tag === 'string')
+            .map((tag) => tag.trim().replace(/\s+/g, ' ').slice(0, 32))
+            .filter(Boolean),
+        )].slice(0, 6)
+      : undefined;
 
     if (!byId.has(bookmarkId)) {
       throw new ProviderError(`Response included an unknown bookmark id: ${bookmarkId || '<missing>'}.`, provider);
@@ -160,6 +174,8 @@ export function validateClassifications(
       confidence,
       provider,
       reason,
+      ...(description ? { description } : {}),
+      ...(tags && tags.length > 0 ? { tags } : {}),
     };
   });
 
