@@ -1,6 +1,6 @@
 {
   "name": "recall-ai-bookmark-finder",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "type": "module",
   "description": "Manifest V3 Chrome extension for fast local bookmark search, smart metadata, and optional AI-assisted cleanup.",
