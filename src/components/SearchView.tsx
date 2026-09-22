@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import {
   Alert,
   Avatar,
@@ -172,7 +172,7 @@ export default function SearchView({
     }
   }
 
-  function handleSearchKeyDown(event: React.KeyboardEvent<HTMLInputElement>): void {
+  function handleSearchKeyDown(event: ReactKeyboardEvent<HTMLInputElement>): void {
     if (event.key !== 'Enter') return;
     void rememberSearch();
     if (hits[0]) {
