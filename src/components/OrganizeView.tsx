@@ -164,8 +164,8 @@ export default function OrganizeView({
       updates[item.id] = {
         ...base,
         category: item.targetFolder,
-        description: item.reason || base.description,
-        tags: [...new Set([...base.tags, ...folderTags])].slice(0, 10),
+        description: item.description || item.reason || base.description,
+        tags: [...new Set([...base.tags, ...(item.tags ?? []), ...folderTags])].slice(0, 10),
         updatedAt: Date.now(),
       };
     }
