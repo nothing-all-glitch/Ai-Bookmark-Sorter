@@ -99,6 +99,7 @@ export default function OrganizeView({
   const [paused, setPaused] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const pausedRef = useRef(false);
 
   useEffect(() => {
     void Promise.all([loadPreviewDraft(), loadUndoPlan(), loadLastRunSummary()]).then(
@@ -175,13 +176,14 @@ export default function OrganizeView({
     const controller = new AbortController();
     abortRef.current = controller;
     setBusy(true);
+    pausedRef.current = false;
     setPaused(false);
     setProgress({ phase: 'scanning', label: 'Scanning bookmarks', completed: 0, total: 1 });
 
     try {
       const result = await createPreview({
         signal: controller.signal,
-        shouldPause: () => paused,
+        shouldPause: () => pausedRef.current,
         onProgress: setProgress,
       });
 
@@ -216,7 +218,9 @@ export default function OrganizeView({
     const controller = new AbortController();
     abortRef.current = controller;
     setBusy(true);
+    pausedRef.current = false;
     setPaused(false);
+    enrichMetadata(previewItems);
 
     try {
       const result = await applyPreview(preview, previewItems, {
@@ -367,7 +371,14 @@ export default function OrganizeView({
 
             {busy && (
               <Tooltip title={paused ? 'Resume' : 'Pause'}>
-                <IconButton onClick={() => setPaused((current) => !current)}>
+                <IconButton
+                  onClick={() => {
+                    setPaused((current) => {
+                      pausedRef.current = !current;
+                      return !current;
+                    });
+                  }}
+                >
                   {paused ? <PlayArrowRoundedIcon /> : <PauseRoundedIcon />}
                 </IconButton>
               </Tooltip>
