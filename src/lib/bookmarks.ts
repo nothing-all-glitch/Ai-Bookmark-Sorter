@@ -1,6 +1,11 @@
 import { getDomain } from './url';
 import { MANAGED_FOLDER_NAME, type BookmarkCandidate, type BookmarkSnapshot, type BookmarkTreeNodeLike } from './types';
 
+export interface SaveCurrentPageResult {
+  node: BookmarkTreeNodeLike;
+  created: boolean;
+}
+
 export function isChromeBookmarksAvailable(): boolean {
   return typeof chrome !== 'undefined' && Boolean(chrome.bookmarks?.getTree);
 }
@@ -151,6 +156,39 @@ export async function moveBookmark(bookmarkId: string, parentId: string, index?:
   await chrome.bookmarks.move(bookmarkId, { parentId, index });
 }
 
+export async function saveCurrentPage(): Promise<SaveCurrentPageResult> {
+  if (
+    typeof chrome === 'undefined' ||
+    !chrome.tabs?.query ||
+    !chrome.bookmarks?.create ||
+    !chrome.bookmarks?.search
+  ) {
+    throw new Error('Saving the current page is only available when the extension is loaded in Chrome.');
+  }
+
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const url = tab?.url;
+  if (!url || !/^https?:\/\//i.test(url)) {
+    throw new Error('This page cannot be bookmarked.');
+  }
+
+  const existing = (await chrome.bookmarks.search({ url })) as BookmarkTreeNodeLike[];
+  const exact = existing.find((item) => item.url === url);
+  if (exact) {
+    return { node: exact, created: false };
+  }
+
+  const tree = await getBookmarkTree();
+  const parentId = findDefaultManagedParentId(tree);
+  const node = (await chrome.bookmarks.create({
+    parentId,
+    title: tab.title?.trim() || url,
+    url,
+  })) as BookmarkTreeNodeLike;
+
+  return { node, created: true };
+}
+
 export function getMockBookmarkTree(): BookmarkTreeNodeLike[] {
   return [
     {
@@ -168,6 +206,7 @@ export function getMockBookmarkTree(): BookmarkTreeNodeLike[] {
               index: 0,
               title: 'React Docs',
               url: 'https://react.dev/reference/react',
+              dateAdded: Date.now() - 3 * 86_400_000,
             },
             {
               id: '11',
@@ -175,6 +214,7 @@ export function getMockBookmarkTree(): BookmarkTreeNodeLike[] {
               index: 1,
               title: 'Google Flights',
               url: 'https://www.google.com/travel/flights',
+              dateAdded: Date.now() - 12 * 86_400_000,
             },
           ],
         },
@@ -189,6 +229,7 @@ export function getMockBookmarkTree(): BookmarkTreeNodeLike[] {
               index: 0,
               title: 'Hacker News',
               url: 'https://news.ycombinator.com',
+              dateAdded: Date.now() - 40 * 86_400_000,
             },
             {
               id: '21',
@@ -202,6 +243,7 @@ export function getMockBookmarkTree(): BookmarkTreeNodeLike[] {
                   index: 0,
                   title: 'Existing organized bookmark',
                   url: 'https://developer.chrome.com/docs/extensions',
+                  dateAdded: Date.now() - 90 * 86_400_000,
                 },
               ],
             },
