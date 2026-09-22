@@ -330,7 +330,7 @@ export default function SearchView({
 
       <Stack direction="row" alignItems="baseline" spacing={1}>
         <Typography variant="h2" sx={{ flex: 1 }}>
-          {query ? 'Results' : filter === 'all' ? 'Recently saved' : FILTERS.find((item) => item.id === filter)?.label}
+          {query ? 'Results' : filter === 'all' ? 'Quick access' : FILTERS.find((item) => item.id === filter)?.label}
         </Typography>
         <Typography variant="caption" color="text.secondary">
           {hits.length} {hits.length === 1 ? 'bookmark' : 'bookmarks'}
