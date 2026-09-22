@@ -166,10 +166,18 @@ export async function saveCurrentPage(): Promise<SaveCurrentPageResult> {
     throw new Error('Saving the current page is only available when the extension is loaded in Chrome.');
   }
 
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  let [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+
+  if (!tab?.url && chrome.permissions?.request) {
+    const granted = await chrome.permissions.request({ permissions: ['tabs'] });
+    if (granted) {
+      [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    }
+  }
+
   const url = tab?.url;
   if (!url || !/^https?:\/\//i.test(url)) {
-    throw new Error('This page cannot be bookmarked.');
+    throw new Error('Recall needs access to the active tab to save this page.');
   }
 
   const existing = (await chrome.bookmarks.search({ url })) as BookmarkTreeNodeLike[];
