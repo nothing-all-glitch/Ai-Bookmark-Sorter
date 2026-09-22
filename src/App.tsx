@@ -65,14 +65,16 @@ export default function App() {
 
   const patchMetadata = useCallback((id: string, patch: Partial<BookmarkMetadata>) => {
     setMetadataMap((current) => {
+      const existing: BookmarkMetadata = current[id] ?? { tags: [] };
+      const nextEntry: BookmarkMetadata = {
+        ...existing,
+        ...patch,
+        tags: patch.tags ?? existing.tags,
+        updatedAt: Date.now(),
+      };
       const next: BookmarkMetadataMap = {
         ...current,
-        [id]: {
-          tags: [],
-          ...(current[id] ?? {}),
-          ...patch,
-          updatedAt: Date.now(),
-        },
+        [id]: nextEntry,
       };
       void saveBookmarkMetadata(next);
       return next;
@@ -83,11 +85,11 @@ export default function App() {
     setMetadataMap((current) => {
       const next: BookmarkMetadataMap = { ...current };
       for (const [id, metadata] of Object.entries(updates)) {
+        const existing: BookmarkMetadata = current[id] ?? { tags: [] };
         next[id] = {
-          tags: [],
-          ...(current[id] ?? {}),
+          ...existing,
           ...metadata,
-          tags: [...new Set([...(current[id]?.tags ?? []), ...(metadata.tags ?? [])])].slice(0, 10),
+          tags: [...new Set([...existing.tags, ...metadata.tags])].slice(0, 10),
           updatedAt: Date.now(),
         };
       }
