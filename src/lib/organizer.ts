@@ -239,6 +239,8 @@ export async function createPreview(controls: OrganizerControls = {}): Promise<P
           confidence: classification.confidence,
           provider: classification.provider,
           reason: classification.reason,
+          description: classification.description,
+          tags: classification.tags,
           selected: true,
         };
       })
