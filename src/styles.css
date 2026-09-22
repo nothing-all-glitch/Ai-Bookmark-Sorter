@@ -5,10 +5,31 @@ body,
   margin: 0;
 }
 
+html,
 body {
-  background: #f7f9fb;
+  background: #08090d;
+}
+
+body {
+  min-width: 320px;
+  color: #f7f7fb;
+  background:
+    radial-gradient(circle at 12% -10%, rgba(139, 92, 246, 0.20), transparent 34%),
+    radial-gradient(circle at 92% 12%, rgba(34, 211, 238, 0.10), transparent 28%),
+    #08090d;
 }
 
 * {
   box-sizing: border-box;
+}
+
+::selection {
+  background: rgba(139, 92, 246, 0.35);
+  color: #ffffff;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
 }
