@@ -1,9 +1,9 @@
 {
-  "name": "ai-bookmark-organizer",
-  "version": "0.1.7",
+  "name": "recall-ai-bookmark-finder",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Manifest V3 Chrome extension that previews and organizes bookmarks with AI provider fallbacks.",
+  "description": "Manifest V3 Chrome extension for fast local bookmark search, smart metadata, and optional AI-assisted cleanup.",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
