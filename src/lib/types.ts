@@ -71,6 +71,8 @@ export interface Classification {
   confidence: number;
   provider: ProviderId;
   reason?: string;
+  description?: string;
+  tags?: string[];
 }
 
 export interface PreviewItem extends BookmarkCandidate {
@@ -78,6 +80,8 @@ export interface PreviewItem extends BookmarkCandidate {
   confidence: number;
   provider: ProviderId;
   reason?: string;
+  description?: string;
+  tags?: string[];
   selected: boolean;
 }
 
