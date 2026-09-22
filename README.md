@@ -6,7 +6,7 @@
   **Find anything you saved. Fast local search first, optional AI when it actually helps.**
 
   <p>
-    <img alt="Source version" src="https://img.shields.io/badge/source-v0.2.0-8b5cf6?style=for-the-badge" />
+    <img alt="Source version" src="https://img.shields.io/badge/source-v0.2.1-8b5cf6?style=for-the-badge" />
     <img alt="Chrome Extension" src="https://img.shields.io/badge/Chrome-Manifest%20V3-22c55e?style=for-the-badge&logo=googlechrome&logoColor=white" />
     <img alt="React" src="https://img.shields.io/badge/React%20%2B%20MUI-UI-22d3ee?style=for-the-badge&logo=react&logoColor=111827" />
   </p>
@@ -32,7 +32,7 @@ Download packaged builds from **[GitHub Releases](https://github.com/nothing-all
 
 ### Install the current source build
 
-The repository source is currently **v0.2.0**. If the packaged Releases page has not caught up yet, build it locally:
+The repository source is currently **v0.2.1**. If the packaged Releases page has not caught up yet, build it locally:
 
 ```bash
 npm install
