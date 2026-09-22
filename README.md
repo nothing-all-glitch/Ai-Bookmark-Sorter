@@ -14,6 +14,35 @@
 
 ---
 
+## Releases & installation
+
+Download packaged builds from **[GitHub Releases](https://github.com/nothing-all-glitch/Ai-Bookmark-Sorter/releases)**.
+
+### Install a release in Chrome
+
+1. Open the Releases page and download the extension **ZIP asset** for the version you want.
+2. Unzip the downloaded file.
+3. Open `chrome://extensions` in Chrome.
+4. Turn on **Developer mode** in the top-right corner.
+5. Click **Load unpacked**.
+6. Select the unzipped extension folder — choose the folder that contains `manifest.json`.
+7. Pin **Recall** from Chrome's Extensions menu for quick access.
+
+> **Important:** use the packaged extension ZIP attached to the release when one is available, not GitHub's automatically generated “Source code” archive.
+
+### Install the current source build
+
+The repository source is currently **v0.2.0**. If the packaged Releases page has not caught up yet, build it locally:
+
+```bash
+npm install
+npm run build
+```
+
+Then open `chrome://extensions` → enable **Developer mode** → **Load unpacked** → select the generated `dist` folder.
+
+To update an unpacked installation later, replace/rebuild the files and click **Reload** on Recall's card in `chrome://extensions`.
+
 ## What changed in 0.2
 
 Recall is a ground-up product and UI rethink of the original AI Bookmark Organizer.
