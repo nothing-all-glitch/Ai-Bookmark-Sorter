@@ -7,6 +7,7 @@ import {
   type RunSummary,
   type UndoPlan,
 } from './types';
+import type { BookmarkMetadataMap } from './search';
 
 const SETTINGS_KEY = 'settings';
 const LEDGER_KEY = 'runLedger';
@@ -14,6 +15,8 @@ const UNDO_KEY = 'lastUndoPlan';
 const LAST_RUN_KEY = 'lastRunSummary';
 const PREVIEW_DRAFT_KEY = 'previewDraft';
 const ACTIVE_OPERATION_KEY = 'activeOperation';
+const BOOKMARK_METADATA_KEY = 'bookmarkMetadata';
+const RECENT_SEARCHES_KEY = 'recentSearches';
 
 type StorageShape = {
   settings?: Partial<OrganizeSettings>;
@@ -22,6 +25,8 @@ type StorageShape = {
   lastRunSummary?: RunSummary | null;
   previewDraft?: PreviewDraft | null;
   activeOperation?: ActiveOperation | null;
+  bookmarkMetadata?: BookmarkMetadataMap;
+  recentSearches?: string[];
 };
 
 function hasChromeStorage(): boolean {
@@ -97,4 +102,28 @@ export async function loadActiveOperation(): Promise<ActiveOperation | null> {
 
 export async function saveActiveOperation(operation: ActiveOperation | null): Promise<void> {
   await setLocal({ activeOperation: operation });
+}
+
+export async function loadBookmarkMetadata(): Promise<BookmarkMetadataMap> {
+  return (await getLocal(BOOKMARK_METADATA_KEY)) ?? {};
+}
+
+export async function saveBookmarkMetadata(metadata: BookmarkMetadataMap): Promise<void> {
+  await setLocal({ bookmarkMetadata: metadata });
+}
+
+export async function loadRecentSearches(): Promise<string[]> {
+  return (await getLocal(RECENT_SEARCHES_KEY)) ?? [];
+}
+
+export async function saveRecentSearch(query: string): Promise<string[]> {
+  const trimmed = query.trim();
+  const current = await loadRecentSearches();
+  if (!trimmed) {
+    return current;
+  }
+
+  const next = [trimmed, ...current.filter((item) => item.toLowerCase() !== trimmed.toLowerCase())].slice(0, 8);
+  await setLocal({ recentSearches: next });
+  return next;
 }
