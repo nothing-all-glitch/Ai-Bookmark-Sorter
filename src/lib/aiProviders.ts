@@ -71,6 +71,20 @@ function truncateText(value: string, maxLength: number): string {
   return value.length <= maxLength ? value : `${value.slice(0, maxLength - 1)}...`;
 }
 
+function normalizeGeminiModel(value: string): string {
+  const trimmed = value.trim().replace(/:generateContent$/i, '');
+  if (!trimmed) {
+    return '';
+  }
+
+  const withoutOrigin = trimmed.replace(/^https?:\/\/[^/]+\/v\d+(?:beta)?\//i, '');
+  const withoutLeadingPath = withoutOrigin.includes('/models/')
+    ? withoutOrigin.slice(withoutOrigin.lastIndexOf('/models/') + '/models/'.length)
+    : withoutOrigin.replace(/^models\//i, '');
+
+  return withoutLeadingPath.replace(/^\/+/, '').trim();
+}
+
 function buildPrompt(bookmarks: BookmarkCandidate[], taxonomy: string[], allowNewFolders: boolean): string {
   const compactBookmarks = bookmarks.map((bookmark) => ({
     i: bookmark.id,
@@ -211,10 +225,14 @@ export function createGeminiProvider(): AiProvider {
       if (!settings.geminiApiKey.trim()) {
         throw new ProviderError('No Gemini API key is saved.', 'gemini');
       }
+      const model = normalizeGeminiModel(settings.geminiModel);
+      if (!model) {
+        throw new ProviderError('No Gemini model is selected.', 'gemini');
+      }
 
       const prompt = buildPrompt(bookmarks, taxonomy, settings.allowNewFolders);
       const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
-        settings.geminiModel.trim(),
+        model,
       )}:generateContent`;
 
       const response = await fetchWithTimeout(
@@ -229,7 +247,6 @@ export function createGeminiProvider(): AiProvider {
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             generationConfig: {
               temperature: 0.1,
-              responseMimeType: 'application/json',
             },
           }),
         },
@@ -467,7 +484,7 @@ async function verifyGeminiConnection(
   signal?: AbortSignal,
 ): Promise<ApiKeyCheckResult> {
   const key = settings.geminiApiKey.trim();
-  const model = settings.geminiModel.trim();
+  const model = normalizeGeminiModel(settings.geminiModel);
 
   if (!key) {
     return { ok: false, provider: 'gemini', message: 'Add a Gemini API key first.' };

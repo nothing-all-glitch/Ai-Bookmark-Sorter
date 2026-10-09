@@ -248,4 +248,25 @@ describe('AI provider helpers', () => {
       provider: 'gemini',
     });
   });
+
+  it('normalizes Gemini model path prefixes before calling the API', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ candidates: [{ content: { parts: [{ text: 'OK' }] } }] }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await testApiProviderKey({
+      ...DEFAULT_SETTINGS,
+      geminiApiKey: 'test-key',
+      geminiModel: 'models/gemini-2.5-flash',
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
+      expect.objectContaining({
+        method: 'POST',
+      }),
+    );
+  });
 });
